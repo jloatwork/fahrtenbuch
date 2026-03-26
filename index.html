@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a1a1a">
+<title>Fahrtenbuch · WDP</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚗</text></svg>">
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiRmFocnRlbmJ1Y2ggV0RQIiwic2hvcnRfbmFtZSI6IkZhaHJ0ZW5idWNoIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiI2ZhZmFmYSIsInRoZW1lX2NvbG9yIjoiIzFhMWExYSJ9">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Outfit:wght@300;400;500;600;700&display=swap');
+  :root{--wdp-black:#1a1a1a;--wdp-dark:#2d2d2d;--wdp-gray:#6b6b6b;--wdp-light:#f5f5f5;--wdp-lighter:#fafafa;--wdp-white:#fff;--wdp-accent:#00b4d8;--wdp-accent-light:#e0f7fa;--wdp-accent-dark:#0096b7;--wdp-green:#2ecc71;--wdp-orange:#f39c12;--wdp-red:#e74c3c;--wdp-border:#e8e8e8;--wdp-shadow:0 2px 16px rgba(0,0,0,.06);--wdp-shadow-lg:0 8px 32px rgba(0,0,0,.10);--r:14px;--rs:10px;--fd:'Outfit',sans-serif;--fb:'DM Sans',sans-serif}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{font-family:var(--fb);background:var(--wdp-lighter);color:var(--wdp-black);min-height:100vh;min-height:100dvh;-webkit-font-smoothing:antialiased}
+  .header{background:rgba(255,255,255,.92);border-bottom:1px solid var(--wdp-border);padding:12px 16px;position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+  .header-inner{max-width:700px;margin:0 auto;display:flex;align-items:center;gap:10px}
+  .logo{font-family:var(--fd);font-weight:700;font-size:18px;letter-spacing:-.5px}.logo span{color:var(--wdp-accent)}
+  .sync-status{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;color:var(--wdp-gray)}
+  .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--wdp-gray);transition:background .3s}
+  .sync-dot.ok{background:var(--wdp-green)}.sync-dot.loading{background:var(--wdp-orange);animation:pulse 1s infinite}.sync-dot.error{background:var(--wdp-red)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .setup-banner{max-width:700px;margin:12px auto 0;padding:0 12px;display:none}.setup-banner.show{display:block}
+  .setup-card{background:linear-gradient(135deg,#fff3cd,#fff9e6);border:1.5px solid #ffc107;border-radius:var(--r);padding:20px}
+  .setup-card h3{font-family:var(--fd);font-size:15px;margin-bottom:8px;color:#856404}
+  .setup-card p{font-size:13px;color:#856404;margin-bottom:6px}
+  .setup-card input{width:100%;padding:10px 12px;border:1.5px solid #ffc107;border-radius:var(--rs);font-family:var(--fb);font-size:14px;outline:none;margin-top:6px}
+  .setup-card input:focus{border-color:var(--wdp-accent)}
+  .setup-card button{margin-top:10px;padding:10px 20px;background:#856404;color:#fff;border:none;border-radius:50px;font-family:var(--fd);font-weight:600;font-size:13px;cursor:pointer}
+  .tabs{display:flex;gap:4px;padding:10px 12px;max-width:700px;margin:0 auto;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tab{font-family:var(--fd);font-size:13px;font-weight:500;padding:9px 16px;border-radius:50px;border:1.5px solid var(--wdp-border);background:var(--wdp-white);color:var(--wdp-gray);cursor:pointer;white-space:nowrap;transition:all .2s;-webkit-tap-highlight-color:transparent}
+  .tab:hover{border-color:var(--wdp-accent);color:var(--wdp-accent)}
+  .tab.active{background:var(--wdp-black);color:var(--wdp-white);border-color:var(--wdp-black)}
+  .main{max-width:700px;margin:0 auto;padding:6px 12px 100px}
+  .card{background:var(--wdp-white);border-radius:var(--r);box-shadow:var(--wdp-shadow);padding:16px;margin-bottom:12px;border:1px solid var(--wdp-border)}
+  .card-title{font-family:var(--fd);font-size:16px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .card-title .icon{width:30px;height:30px;background:var(--wdp-accent-light);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:500px){.form-grid{grid-template-columns:1fr;gap:8px}}
+  .form-group{position:relative}.form-group.full{grid-column:1/-1}
+  .form-label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--wdp-gray);margin-bottom:4px}
+  .form-input{width:100%;padding:10px 12px;border:1.5px solid var(--wdp-border);border-radius:var(--rs);font-family:var(--fb);font-size:16px;color:var(--wdp-black);background:var(--wdp-white);transition:border-color .2s;outline:none;-webkit-appearance:none}
+  .form-input:focus{border-color:var(--wdp-accent)}.form-input::placeholder{color:#bbb}
+  .km-result{background:var(--wdp-accent-light);border:1.5px solid var(--wdp-accent);border-radius:var(--rs);padding:12px;text-align:center;font-family:var(--fd);font-size:20px;font-weight:700;color:var(--wdp-accent-dark)}
+  .km-result small{display:block;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:1px;color:var(--wdp-gray);margin-bottom:2px}
+  .btn{font-family:var(--fd);font-weight:600;font-size:14px;padding:12px 24px;border:none;border-radius:50px;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:8px;-webkit-tap-highlight-color:transparent}
+  .btn-primary{background:var(--wdp-black);color:var(--wdp-white);width:100%;justify-content:center}
+  .btn-primary:hover{background:var(--wdp-accent-dark)}.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+  .btn-danger{background:transparent;color:var(--wdp-red);font-size:12px;padding:6px 14px;border:1.5px solid var(--wdp-red)}
+  .btn-danger:hover{background:var(--wdp-red);color:#fff}
+  .btn-export{background:var(--wdp-accent);color:#fff;font-size:13px;padding:8px 18px;border:none;border-radius:50px;cursor:pointer;font-family:var(--fd);font-weight:600}
+  .btn-export:hover{background:var(--wdp-accent-dark)}
+  .btn-start{font-family:var(--fd);font-weight:700;font-size:16px;flex:1;padding:16px;border:none;border-radius:var(--r);cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--wdp-green);color:#fff;box-shadow:0 4px 16px rgba(46,204,113,.3);-webkit-tap-highlight-color:transparent}
+  .btn-start:hover{background:#27ae60}.btn-start:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+  .btn-stop{font-family:var(--fd);font-weight:700;font-size:16px;flex:1;padding:16px;border:none;border-radius:var(--r);cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--wdp-red);color:#fff;box-shadow:0 4px 16px rgba(231,76,60,.3);-webkit-tap-highlight-color:transparent}
+  .btn-stop:hover{background:#c0392b}.btn-stop:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+  .btn-start.active{animation:pg 2s infinite}
+  @keyframes pg{0%,100%{box-shadow:0 4px 16px rgba(46,204,113,.3)}50%{box-shadow:0 4px 24px rgba(46,204,113,.6)}}
+  .table-wrap{overflow-x:auto;margin-top:12px;-webkit-overflow-scrolling:touch}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-family:var(--fd);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--wdp-gray);text-align:left;padding:8px 10px;border-bottom:2px solid var(--wdp-border);white-space:nowrap}
+  td{padding:8px 10px;border-bottom:1px solid var(--wdp-border);vertical-align:middle}
+  tr:last-child td{border-bottom:none}tr:hover td{background:var(--wdp-lighter)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:50px;font-size:11px;font-weight:600;background:var(--wdp-accent-light);color:var(--wdp-accent-dark)}
+  .delete-btn{background:none;border:none;cursor:pointer;color:var(--wdp-red);font-size:16px;padding:4px;opacity:.5;transition:opacity .2s}.delete-btn:hover{opacity:1}
+  .autocomplete-list{position:absolute;top:100%;left:0;right:0;background:var(--wdp-white);border:1.5px solid var(--wdp-border);border-top:none;border-radius:0 0 var(--rs) var(--rs);max-height:150px;overflow-y:auto;z-index:50;box-shadow:var(--wdp-shadow);display:none}
+  .autocomplete-list.show{display:block}
+  .autocomplete-item{padding:10px 12px;cursor:pointer;font-size:14px}.autocomplete-item:hover{background:var(--wdp-accent-light)}
+  .kw-input{width:60px;padding:6px;border:1.5px solid var(--wdp-border);border-radius:8px;font-family:var(--fb);font-size:14px;text-align:center;outline:none}.kw-input:focus{border-color:var(--wdp-accent)}
+  .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+  @media(max-width:500px){.summary-grid{grid-template-columns:1fr}}
+  .summary-card{background:var(--wdp-lighter);border-radius:var(--rs);padding:14px;text-align:center;border:1px solid var(--wdp-border)}
+  .summary-value{font-family:var(--fd);font-size:24px;font-weight:700;color:var(--wdp-accent-dark)}
+  .summary-label{font-size:10px;color:var(--wdp-gray);text-transform:uppercase;letter-spacing:.7px;margin-top:4px}
+  .month-total{background:linear-gradient(135deg,var(--wdp-black),var(--wdp-dark));border-radius:var(--r);padding:20px;color:#fff;text-align:center;margin-top:14px}
+  .month-total-value{font-family:var(--fd);font-size:32px;font-weight:700}
+  .month-total-label{font-size:11px;opacity:.7;text-transform:uppercase;letter-spacing:1px;margin-top:4px}
+  .tab-content{display:none}.tab-content.active{display:block}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--wdp-black);color:#fff;padding:12px 24px;border-radius:50px;font-family:var(--fd);font-size:13px;font-weight:500;z-index:999;opacity:0;transition:all .35s cubic-bezier(.175,.885,.32,1.275);pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .month-selector select{padding:10px 12px;border:1.5px solid var(--wdp-border);border-radius:var(--rs);font-family:var(--fb);font-size:14px;outline:none;background:var(--wdp-white);cursor:pointer;margin-bottom:16px}
+  .empty-state{text-align:center;padding:30px 16px;color:var(--wdp-gray)}.empty-state .icon{font-size:36px;margin-bottom:10px}.empty-state p{font-size:13px}
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center;padding:16px}.modal-overlay.show{display:flex}
+  .modal{background:var(--wdp-white);border-radius:var(--r);padding:24px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;box-shadow:var(--wdp-shadow-lg)}
+  .modal-title{font-family:var(--fd);font-size:17px;font-weight:600;margin-bottom:16px}
+  .modal-actions{display:flex;gap:10px;margin-top:16px}.modal-actions .btn{flex:1}
+  .btn-secondary{background:var(--wdp-light);color:var(--wdp-black);justify-content:center}
+  .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.85);z-index:300;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+  .loading-overlay.show{display:flex}
+  .spinner{width:36px;height:36px;border:3px solid var(--wdp-border);border-top-color:var(--wdp-accent);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loading-text{font-family:var(--fd);font-size:13px;color:var(--wdp-gray)}
+</style>
+</head>
+<body>
+<div class="header"><div class="header-inner">
+  <div class="logo">waterdrop<span>&middot;</span>drive</div>
+  <div class="sync-status"><div class="sync-dot" id="sync-dot"></div><span id="sync-text">Offline</span></div>
+</div></div>
+
+<div class="setup-banner" id="setup-banner"><div class="setup-card">
+  <h3>&#9881;&#65039; Google Sheets verbinden</h3>
+  <p>Apps Script Web-App URL einfügen:</p>
+  <input type="text" id="api-url-input" placeholder="https://script.google.com/macros/s/..../exec">
+  <button onclick="saveApiUrl()">Verbinden</button>
+</div></div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="fahrtenbuch">&#128663; Fahrtenbuch</button>
+  <button class="tab" data-tab="kwuebersicht">&#128202; KW-Übersicht</button>
+  <button class="tab" data-tab="monatsabrechnung">&#128182; Abrechnung</button>
+</div>
+
+<div class="main">
+  <div id="tab-fahrtenbuch" class="tab-content active">
+    <div class="card">
+      <div style="display:flex;gap:10px;">
+        <button class="btn-start" id="btn-start" onclick="stampStart()">&#9654; START</button>
+        <button class="btn-stop" id="btn-stop" onclick="stampStop()" disabled>&#9632; STOP</button>
+      </div>
+      <div id="trip-status" style="margin-top:10px;font-size:13px;color:var(--wdp-gray);display:none;"><span id="trip-status-text"></span></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon">&#128663;</div> Fahrt-Details</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Datum</label><input type="date" id="f-date" class="form-input"></div>
+        <div class="form-group"><label class="form-label">Uhrzeit Abfahrt</label><input type="time" id="f-time" class="form-input"></div>
+        <div class="form-group"><label class="form-label">Ort Abfahrt</label><input type="text" id="f-from" class="form-input" placeholder="z.B. Salzburg" autocomplete="off"><div class="autocomplete-list" id="ac-from"></div></div>
+        <div class="form-group"><label class="form-label">Uhrzeit Ankunft</label><input type="time" id="f-time-arrival" class="form-input"></div>
+        <div class="form-group"><label class="form-label">Ort Ankunft</label><input type="text" id="f-to" class="form-input" placeholder="z.B. Neu-Ulm" autocomplete="off"><div class="autocomplete-list" id="ac-to"></div></div>
+        <div class="form-group full"><label class="form-label">Fahrzeug</label><input type="text" id="f-vehicle" class="form-input" value="FORD Focus S-147XX"></div>
+        <div class="form-group full"><label class="form-label">Zweck der Reise</label><input type="text" id="f-purpose" class="form-input" placeholder="z.B. Büro WDP Neu-Ulm" autocomplete="off"><div class="autocomplete-list" id="ac-purpose"></div></div>
+        <div class="form-group"><label class="form-label">KM Stand Abfahrt</label><input type="number" id="f-km-start" class="form-input" placeholder="z.B. 42000" inputmode="numeric"></div>
+        <div class="form-group"><label class="form-label">KM Stand Ankunft</label><input type="number" id="f-km-end" class="form-input" placeholder="z.B. 42350" inputmode="numeric"></div>
+        <div class="form-group full"><div class="km-result" id="km-diff"><small>Gefahrene Kilometer</small>0 km</div></div>
+        <div class="form-group full"><button class="btn btn-primary" id="btn-save">&#10003; Fahrt speichern</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between;">
+        <span style="display:flex;align-items:center;gap:8px;"><div class="icon">&#128203;</div> Einträge</span>
+        <div style="display:flex;gap:6px;">
+          <button class="btn-export" style="font-size:11px;padding:5px 12px;" id="btn-refresh">&#128260; Sync</button>
+          <button class="btn-danger" id="btn-clear-all" style="display:none;">Alle löschen</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <div id="entries-empty" class="empty-state"><div class="icon">&#128237;</div><p>Noch keine Fahrten.</p></div>
+        <table id="entries-table" style="display:none;"><thead><tr><th>Datum / Zeit</th><th>Von → Nach</th><th>Zweck</th><th>km</th><th></th></tr></thead><tbody id="entries-body"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-kwuebersicht" class="tab-content">
+    <div class="card">
+      <div class="card-title"><div class="icon">&#128202;</div> KW-Übersicht</div>
+      <p style="font-size:12px;color:var(--wdp-gray);margin-bottom:12px;">Kilometer automatisch. Verpflegungstage manuell eingeben.</p>
+      <div class="table-wrap">
+        <div id="kw-empty" class="empty-state"><div class="icon">&#128237;</div><p>Noch keine Daten.</p></div>
+        <table id="kw-table" style="display:none;"><thead><tr><th>KW</th><th>Zeitraum</th><th>Fahrten</th><th>km</th><th>Verpfl.</th></tr></thead><tbody id="kw-body"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-monatsabrechnung" class="tab-content">
+    <div class="card">
+      <div class="card-title"><div class="icon">&#128182;</div> Monatsabrechnung</div>
+      <div class="month-selector"><select id="month-select"></select></div>
+      <div class="summary-grid">
+        <div class="summary-card"><div class="summary-value" id="sum-km">0</div><div class="summary-label">Kilometer gesamt</div></div>
+        <div class="summary-card"><div class="summary-value" id="sum-km-euro">€ 0,00</div><div class="summary-label">km × 0,50 €</div></div>
+        <div class="summary-card"><div class="summary-value" id="sum-days">0</div><div class="summary-label">Verpflegungstage</div></div>
+        <div class="summary-card"><div class="summary-value" id="sum-days-euro">€ 0,00</div><div class="summary-label">Tage × 45 €</div></div>
+      </div>
+      <div class="month-total"><div class="month-total-label">Gesamt Erstattung</div><div class="month-total-value" id="sum-total">€ 0,00</div></div>
+      <div style="margin-top:16px;text-align:center;"><button class="btn btn-export" id="btn-export-csv">&#128228; CSV Export</button></div>
+    </div>
+    <div class="card" style="margin-top:10px;">
+      <div class="card-title"><div class="icon">&#128203;</div> KW-Details</div>
+      <div class="table-wrap">
+        <table id="month-detail-table" style="display:none;"><thead><tr><th>KW</th><th>km</th><th>Tage</th><th>km-€</th><th>Verpfl.-€</th></tr></thead><tbody id="month-detail-body"></tbody></table>
+        <div id="month-detail-empty" class="empty-state"><div class="icon">&#128237;</div><p>Keine Daten.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="edit-modal"><div class="modal">
+  <div class="modal-title">Fahrt bearbeiten</div>
+  <div class="form-grid">
+    <div class="form-group"><label class="form-label">Datum</label><input type="date" id="e-date" class="form-input"></div>
+    <div class="form-group"><label class="form-label">Uhrzeit Abfahrt</label><input type="time" id="e-time" class="form-input"></div>
+    <div class="form-group"><label class="form-label">Ort Abfahrt</label><input type="text" id="e-from" class="form-input"></div>
+    <div class="form-group"><label class="form-label">Uhrzeit Ankunft</label><input type="time" id="e-time-arrival" class="form-input"></div>
+    <div class="form-group"><label class="form-label">Ort Ankunft</label><input type="text" id="e-to" class="form-input"></div>
+    <div class="form-group full"><label class="form-label">Fahrzeug</label><input type="text" id="e-vehicle" class="form-input"></div>
+    <div class="form-group full"><label class="form-label">Zweck</label><input type="text" id="e-purpose" class="form-input"></div>
+    <div class="form-group"><label class="form-label">KM Start</label><input type="number" id="e-km-start" class="form-input" inputmode="numeric"></div>
+    <div class="form-group"><label class="form-label">KM Ende</label><input type="number" id="e-km-end" class="form-input" inputmode="numeric"></div>
+  </div>
+  <div class="modal-actions">
+    <button class="btn btn-secondary" id="btn-edit-cancel">Abbrechen</button>
+    <button class="btn btn-primary" id="btn-edit-save" style="width:auto;flex:1;">Speichern</button>
+  </div>
+</div></div>
+
+<!-- KM Prompt Modal -->
+<div class="modal-overlay" id="km-modal"><div class="modal" style="max-width:360px;">
+  <div class="modal-title" id="km-modal-title">KM-Stand</div>
+  <div class="form-group">
+    <label class="form-label" id="km-modal-label">Kilometerstand</label>
+    <input type="number" id="km-modal-input" class="form-input" placeholder="z.B. 96448" style="font-size:22px;text-align:center;font-weight:600;" inputmode="numeric">
+  </div>
+  <div class="modal-actions" style="margin-top:14px;">
+    <button class="btn btn-secondary" id="km-modal-cancel">Abbrechen</button>
+    <button class="btn btn-primary" id="km-modal-ok" style="width:auto;flex:1;">OK</button>
+  </div>
+</div></div>
+
+<div class="loading-overlay show" id="loading"><div class="spinner"></div><div class="loading-text">Daten laden...</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== CONFIG =====
+const CFG='wdp_api_url',LE='wdp_fb_entries',LK='wdp_fb_kwdays';
+let API_URL=localStorage.getItem(CFG)||'',entries=[],kwDays={},editIdx=-1,tripActive=false;
+
+// ===== HELPERS =====
+function pad(n){return String(n).padStart(2,'0')}
+function now(){const d=new Date();return{date:d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()),time:pad(d.getHours())+':'+pad(d.getMinutes())}}
+function formatDate(s){if(!s)return'';const p=s.split('-');return p[2]+'.'+p[1]+'.'+p[0]}
+function formatEuro(n){return'\u20AC '+n.toFixed(2).replace('.',',')}
+function getWeek(ds){const d=new Date(ds),t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));t.setUTCDate(t.getUTCDate()+4-(t.getUTCDay()||7));const ys=new Date(Date.UTC(t.getUTCFullYear(),0,1));return{year:t.getUTCFullYear(),week:Math.ceil((((t-ys)/864e5)+1)/7)}}
+function getWeekRange(y,w){const j=new Date(Date.UTC(y,0,4)),dw=j.getUTCDay()||7,m=new Date(j);m.setUTCDate(j.getUTCDate()-dw+1+(w-1)*7);const s=new Date(m);s.setUTCDate(m.getUTCDate()+6);return pad(m.getUTCDate())+'.'+pad(m.getUTCMonth()+1)+' \u2013 '+pad(s.getUTCDate())+'.'+pad(s.getUTCMonth()+1)}
+function monthLabel(ym){const[y,m]=ym.split('-');return['J\u00E4nner','Februar','M\u00E4rz','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][parseInt(m)-1]+' '+y}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
+function setSync(s,t){document.getElementById('sync-dot').className='sync-dot '+s;document.getElementById('sync-text').textContent=t}
+function showLoading(v){document.getElementById('loading').classList.toggle('show',v)}
+function saveLocal(){localStorage.setItem(LE,JSON.stringify(entries));localStorage.setItem(LK,JSON.stringify(kwDays))}
+function loadLocal(){try{entries=JSON.parse(localStorage.getItem(LE))||[]}catch{entries=[]}try{kwDays=JSON.parse(localStorage.getItem(LK))||{}}catch{kwDays={}}}
+
+// ===== JSONP API =====
+let _jid=0;
+function apiCall(action,data){
+  return new Promise(resolve=>{
+    if(!API_URL){resolve(null);return}
+    const cb='_cb'+(++_jid)+'_'+Date.now();
+    const to=setTimeout(()=>{delete window[cb];resolve(null)},15000);
+    window[cb]=function(r){clearTimeout(to);delete window[cb];const s=document.getElementById('s_'+cb);if(s)s.remove();resolve(r)};
+    let url=API_URL+'?action='+action+'&callback='+cb;
+    if(data)url+='&data='+encodeURIComponent(JSON.stringify(data));
+    const s=document.createElement('script');s.id='s_'+cb;s.src=url;
+    s.onerror=function(){clearTimeout(to);delete window[cb];s.remove();resolve(null)};
+    document.head.appendChild(s);
+  });
+}
+
+async function syncFromCloud(){
+  if(!API_URL){setSync('error','Nicht verbunden');return false}
+  setSync('loading','Laden...');
+  try{
+    const[re,rk]=await Promise.all([apiCall('getEntries'),apiCall('getKwDays')]);
+    if(re&&re.entries){entries=re.entries;if(rk&&rk.kwDays)kwDays=rk.kwDays;saveLocal();setSync('ok','Sync \u2013 '+entries.length+' Fahrten');return true}
+    if(re&&re.error){setSync('error',re.error);return false}
+    setSync('error','Keine Daten');return false;
+  }catch(e){setSync('error','Fehler');return false}
+}
+async function syncToCloud(){
+  if(!API_URL){saveLocal();return}
+  setSync('loading','Speichern...');
+  const[re]=await Promise.all([apiCall('saveEntries',entries),apiCall('saveKwDays',kwDays)]);
+  if(re&&re.success){saveLocal();setSync('ok','Gespeichert \u2013 '+entries.length)}else{saveLocal();setSync('error','Fehler (lokal gesichert)')}
+}
+
+// ===== SETUP =====
+function checkSetup(){if(!API_URL){document.getElementById('setup-banner').classList.add('show');setSync('error','Nicht verbunden')}else{document.getElementById('setup-banner').classList.remove('show')}}
+function saveApiUrl(){const u=document.getElementById('api-url-input').value.trim();if(!u)return;API_URL=u;localStorage.setItem(CFG,u);document.getElementById('setup-banner').classList.remove('show');showToast('Verbunden!');initData()}
+
+// ===== AUTOCOMPLETE =====
+function getUniq(f){return[...new Set(entries.map(e=>e[f]).filter(Boolean))]}
+function setupAC(i,l,f){const el=document.getElementById(i),li=document.getElementById(l);el.addEventListener('focus',()=>showAC(el,li,f));el.addEventListener('input',()=>showAC(el,li,f));document.addEventListener('click',e=>{if(!el.contains(e.target)&&!li.contains(e.target))li.classList.remove('show')})}
+function showAC(el,li,f){const v=el.value.toLowerCase(),items=getUniq(f).filter(x=>x.toLowerCase().includes(v));if(!items.length){li.classList.remove('show');return}li.innerHTML=items.map(x=>'<div class="autocomplete-item">'+x+'</div>').join('');li.classList.add('show');li.querySelectorAll('.autocomplete-item').forEach(a=>{a.addEventListener('click',()=>{el.value=a.textContent;li.classList.remove('show')})})}
+
+// ===== TABS =====
+document.querySelectorAll('.tab').forEach(t=>{t.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));t.classList.add('active');document.getElementById('tab-'+t.dataset.tab).classList.add('active');if(t.dataset.tab==='kwuebersicht')renderKW();if(t.dataset.tab==='monatsabrechnung')renderMonth()})});
+
+// ===== FORM + START/STOP =====
+function initForm(){if(entries.length){const l=entries[entries.length-1];if(l.kmEnd)document.getElementById('f-km-start').value=l.kmEnd}restoreTripState()}
+function calcKm(){const s=parseFloat(document.getElementById('f-km-start').value)||0,e=parseFloat(document.getElementById('f-km-end').value)||0;document.getElementById('km-diff').innerHTML='<small>Gefahrene Kilometer</small>'+Math.max(0,e-s)+' km'}
+document.getElementById('f-km-start').addEventListener('input',calcKm);
+document.getElementById('f-km-end').addEventListener('input',calcKm);
+
+function stampStart(){
+  const lastKm=entries.length?entries[entries.length-1].kmEnd:0;
+  openKmModal('Abfahrt \u2013 KM-Stand','KM-Stand bei Abfahrt',lastKm,function(km){
+    const n=now();
+    document.getElementById('f-date').value=n.date;document.getElementById('f-time').value=n.time;
+    document.getElementById('f-time-arrival').value='';document.getElementById('f-km-start').value=km;
+    document.getElementById('f-km-end').value='';calcKm();
+    tripActive=true;localStorage.setItem('wdp_trip',JSON.stringify({date:n.date,time:n.time,kmStart:km}));
+    updateTripUI();showToast('\u25B6 Start \u2013 '+n.time+' \u2013 '+km+' km');
+  });
+}
+function stampStop(){
+  openKmModal('Ankunft \u2013 KM-Stand','KM-Stand bei Ankunft',0,function(km){
+    const n=now();
+    document.getElementById('f-time-arrival').value=n.time;document.getElementById('f-km-end').value=km;calcKm();
+    tripActive=false;localStorage.removeItem('wdp_trip');updateTripUI();
+    showToast('\u25A0 Ankunft \u2013 '+n.time+' \u2013 '+km+' km');
+  });
+}
+let _kmCb=null;
+function openKmModal(title,label,pre,cb){
+  _kmCb=cb;document.getElementById('km-modal-title').textContent=title;
+  document.getElementById('km-modal-label').textContent=label;
+  const i=document.getElementById('km-modal-input');i.value=pre||'';
+  document.getElementById('km-modal').classList.add('show');setTimeout(()=>i.focus(),100);
+}
+document.getElementById('km-modal-ok').addEventListener('click',function(){
+  const v=parseFloat(document.getElementById('km-modal-input').value);
+  if(!v&&v!==0){showToast('\u26A0 KM eingeben');return}
+  document.getElementById('km-modal').classList.remove('show');if(_kmCb)_kmCb(v);_kmCb=null;
+});
+document.getElementById('km-modal-cancel').addEventListener('click',function(){document.getElementById('km-modal').classList.remove('show');_kmCb=null});
+document.getElementById('km-modal-input').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('km-modal-ok').click()});
+
+function updateTripUI(){
+  const bs=document.getElementById('btn-start'),be=document.getElementById('btn-stop'),st=document.getElementById('trip-status'),tx=document.getElementById('trip-status-text');
+  if(tripActive){bs.disabled=true;bs.classList.add('active');be.disabled=false;st.style.display='block';
+    tx.innerHTML='\u{1F7E2} Fahrt seit <strong>'+document.getElementById('f-time').value+'</strong> ('+document.getElementById('f-km-start').value+' km)';
+  }else{bs.disabled=false;bs.classList.remove('active');be.disabled=true;st.style.display='none'}
+}
+function restoreTripState(){
+  const s=localStorage.getItem('wdp_trip');
+  if(s){try{const d=JSON.parse(s);document.getElementById('f-date').value=d.date;document.getElementById('f-time').value=d.time;if(d.kmStart)document.getElementById('f-km-start').value=d.kmStart;tripActive=true}catch{tripActive=false}}else{tripActive=false}
+  updateTripUI();
+}
+
+// ===== SAVE =====
+document.getElementById('btn-save').addEventListener('click',async()=>{
+  const e={date:document.getElementById('f-date').value,time:document.getElementById('f-time').value,timeArrival:document.getElementById('f-time-arrival').value,from:document.getElementById('f-from').value.trim(),to:document.getElementById('f-to').value.trim(),vehicle:document.getElementById('f-vehicle').value.trim(),purpose:document.getElementById('f-purpose').value.trim(),kmStart:parseFloat(document.getElementById('f-km-start').value)||0,kmEnd:parseFloat(document.getElementById('f-km-end').value)||0};
+  if(!e.date||!e.from||!e.to){showToast('\u26A0 Datum, Abfahrt und Ankunft nötig');return}
+  e.km=Math.max(0,e.kmEnd-e.kmStart);
+  const btn=document.getElementById('btn-save');btn.disabled=true;btn.textContent='Speichern...';
+  entries.push(e);entries.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  await syncToCloud();renderEntries();showToast('\u2713 Gespeichert');
+  btn.disabled=false;btn.innerHTML='&#10003; Fahrt speichern';
+  document.getElementById('f-from').value='';document.getElementById('f-to').value='';document.getElementById('f-purpose').value='';document.getElementById('f-time-arrival').value='';
+  document.getElementById('f-km-start').value=e.kmEnd;document.getElementById('f-km-end').value='';
+  document.getElementById('km-diff').innerHTML='<small>Gefahrene Kilometer</small>0 km';
+  document.getElementById('f-date').value='';document.getElementById('f-time').value='';
+  tripActive=false;localStorage.removeItem('wdp_trip');updateTripUI();
+});
+
+// ===== ENTRIES =====
+function renderEntries(){
+  const body=document.getElementById('entries-body'),tbl=document.getElementById('entries-table'),emp=document.getElementById('entries-empty'),clr=document.getElementById('btn-clear-all');
+  if(!entries.length){tbl.style.display='none';emp.style.display='block';clr.style.display='none';return}
+  tbl.style.display='table';emp.style.display='none';clr.style.display='inline-flex';
+  body.innerHTML=entries.map((e,i)=>'<tr style="cursor:pointer" onclick="openEdit('+i+')"><td><strong>'+formatDate(e.date)+'</strong><br><span style="font-size:11px;color:var(--wdp-gray)">'+(e.time||'')+' \u2192 '+(e.timeArrival||'')+'</span></td><td>'+e.from+' \u2192 '+e.to+'</td><td><span style="font-size:12px">'+e.purpose+'</span></td><td><span class="badge">'+e.km+'</span></td><td><button class="delete-btn" onclick="event.stopPropagation();deleteEntry('+i+')">\u2715</button></td></tr>').join('');
+}
+async function deleteEntry(i){if(!confirm('Löschen?'))return;entries.splice(i,1);await syncToCloud();renderEntries();showToast('Gelöscht')}
+document.getElementById('btn-clear-all').addEventListener('click',async()=>{if(!confirm('ALLE löschen?'))return;entries=[];kwDays={};await syncToCloud();renderEntries();showToast('Gelöscht')});
+document.getElementById('btn-refresh').addEventListener('click',async()=>{showLoading(true);const ok=await syncFromCloud();showLoading(false);renderEntries();initForm();showToast(ok?'\u2713 Sync':'Fehler')});
+
+// ===== EDIT =====
+function openEdit(i){editIdx=i;const e=entries[i];document.getElementById('e-date').value=e.date;document.getElementById('e-time').value=e.time;document.getElementById('e-time-arrival').value=e.timeArrival||'';document.getElementById('e-from').value=e.from;document.getElementById('e-to').value=e.to;document.getElementById('e-vehicle').value=e.vehicle;document.getElementById('e-purpose').value=e.purpose;document.getElementById('e-km-start').value=e.kmStart;document.getElementById('e-km-end').value=e.kmEnd;document.getElementById('edit-modal').classList.add('show')}
+document.getElementById('btn-edit-cancel').addEventListener('click',()=>{document.getElementById('edit-modal').classList.remove('show')});
+document.getElementById('btn-edit-save').addEventListener('click',async()=>{const e=entries[editIdx];e.date=document.getElementById('e-date').value;e.time=document.getElementById('e-time').value;e.timeArrival=document.getElementById('e-time-arrival').value;e.from=document.getElementById('e-from').value.trim();e.to=document.getElementById('e-to').value.trim();e.vehicle=document.getElementById('e-vehicle').value.trim();e.purpose=document.getElementById('e-purpose').value.trim();e.kmStart=parseFloat(document.getElementById('e-km-start').value)||0;e.kmEnd=parseFloat(document.getElementById('e-km-end').value)||0;e.km=Math.max(0,e.kmEnd-e.kmStart);entries.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));await syncToCloud();renderEntries();document.getElementById('edit-modal').classList.remove('show');showToast('\u2713 Aktualisiert')});
+
+// ===== KW =====
+function renderKW(){
+  const km={};entries.forEach(e=>{const w=getWeek(e.date),k=w.year+'-'+pad(w.week);if(!km[k])km[k]={year:w.year,week:w.week,km:0,count:0};km[k].km+=e.km;km[k].count++});
+  const keys=Object.keys(km).sort(),tbl=document.getElementById('kw-table'),emp=document.getElementById('kw-empty'),body=document.getElementById('kw-body');
+  if(!keys.length){tbl.style.display='none';emp.style.display='block';return}
+  tbl.style.display='table';emp.style.display='none';
+  body.innerHTML=keys.map(k=>{const d=km[k];return'<tr><td><strong>KW '+d.week+'</strong></td><td style="font-size:11px;color:var(--wdp-gray)">'+getWeekRange(d.year,d.week)+'</td><td>'+d.count+'</td><td><span class="badge">'+d.km+'</span></td><td><input type="number" class="kw-input" min="0" max="7" value="'+(kwDays[k]||0)+'" data-kw="'+k+'" onchange="updateKwDay(this)" inputmode="numeric"></td></tr>'}).join('');
+}
+async function updateKwDay(el){kwDays[el.dataset.kw]=parseInt(el.value)||0;await syncToCloud()}
+
+// ===== MONAT =====
+function renderMonth(){const ms=new Set();entries.forEach(e=>ms.add(e.date.substring(0,7)));const n=new Date();ms.add(n.getFullYear()+'-'+pad(n.getMonth()+1));document.getElementById('month-select').innerHTML=[...ms].sort().reverse().map(m=>'<option value="'+m+'">'+monthLabel(m)+'</option>').join('');calcMonth()}
+function calcMonth(){
+  const sel=document.getElementById('month-select').value;if(!sel)return;
+  const[sy,sm]=sel.split('-').map(Number),kw={};
+  entries.forEach(e=>{const d=new Date(e.date);if(d.getFullYear()===sy&&d.getMonth()+1===sm){const w=getWeek(e.date),k=w.year+'-'+pad(w.week);if(!kw[k])kw[k]={week:w.week,km:0,days:kwDays[k]||0};kw[k].km+=e.km}});
+  const keys=Object.keys(kw).sort();let tk=0,td=0;keys.forEach(k=>{tk+=kw[k].km;td+=kw[k].days});
+  const ke=tk*.5,de=td*45;
+  document.getElementById('sum-km').textContent=tk;document.getElementById('sum-km-euro').textContent=formatEuro(ke);
+  document.getElementById('sum-days').textContent=td;document.getElementById('sum-days-euro').textContent=formatEuro(de);
+  document.getElementById('sum-total').textContent=formatEuro(ke+de);
+  const db=document.getElementById('month-detail-body'),dt=document.getElementById('month-detail-table'),dem=document.getElementById('month-detail-empty');
+  if(!keys.length){dt.style.display='none';dem.style.display='block'}else{
+    dt.style.display='table';dem.style.display='none';
+    db.innerHTML=keys.map(k=>'<tr><td><strong>KW '+kw[k].week+'</strong></td><td>'+kw[k].km+'</td><td>'+kw[k].days+'</td><td>'+formatEuro(kw[k].km*.5)+'</td><td>'+formatEuro(kw[k].days*45)+'</td></tr>').join('')+'<tr style="font-weight:700;border-top:2px solid var(--wdp-black)"><td>Gesamt</td><td>'+tk+'</td><td>'+td+'</td><td>'+formatEuro(ke)+'</td><td>'+formatEuro(de)+'</td></tr>';
+  }
+}
+document.getElementById('month-select').addEventListener('change',calcMonth);
+
+// ===== CSV =====
+document.getElementById('btn-export-csv').addEventListener('click',()=>{
+  const sel=document.getElementById('month-select').value;if(!sel)return;
+  const[sy,sm]=sel.split('-').map(Number),me=entries.filter(e=>{const d=new Date(e.date);return d.getFullYear()===sy&&d.getMonth()+1===sm});
+  let csv='Datum;Uhrzeit Abfahrt;Uhrzeit Ankunft;Von;Nach;Fahrzeug;Zweck;KM Start;KM Ende;Kilometer\n';
+  me.forEach(e=>{csv+=formatDate(e.date)+';'+e.time+';'+(e.timeArrival||'')+';'+e.from+';'+e.to+';'+e.vehicle+';'+e.purpose+';'+e.kmStart+';'+e.kmEnd+';'+e.km+'\n'});
+  const tk=me.reduce((s,e)=>s+e.km,0);let td=0;const seen=new Set();
+  me.forEach(e=>{const w=getWeek(e.date),k=w.year+'-'+pad(w.week);if(!seen.has(k)){seen.add(k);td+=(kwDays[k]||0)}});
+  csv+='\nZusammenfassung '+monthLabel(sel)+'\nKilometer;'+tk+'\nKilometergeld;'+(tk*.5).toFixed(2)+'\nVerpflegungstage;'+td+'\nVerpflegungspauschale;'+(td*45).toFixed(2)+'\nGESAMT;'+(tk*.5+td*45).toFixed(2)+'\n';
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.download='Fahrtenbuch_'+sel+'.csv';a.click();showToast('CSV exportiert');
+});
+
+// ===== INIT =====
+setupAC('f-from','ac-from','from');setupAC('f-to','ac-to','to');setupAC('f-purpose','ac-purpose','purpose');
+async function initData(){loadLocal();renderEntries();initForm();checkSetup();if(API_URL){showLoading(true);const ok=await syncFromCloud();showLoading(false);if(ok){renderEntries();initForm()}}else{showLoading(false)}}
+initData();
+</script>
+</body>
+</html>

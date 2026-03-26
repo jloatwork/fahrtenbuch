@@ -395,12 +395,17 @@ document.getElementById('btn-edit-cancel').addEventListener('click',()=>{documen
 document.getElementById('btn-edit-save').addEventListener('click',async()=>{const e=entries[editIdx];e.date=document.getElementById('e-date').value;e.time=document.getElementById('e-time').value;e.timeArrival=document.getElementById('e-time-arrival').value;e.from=document.getElementById('e-from').value.trim();e.to=document.getElementById('e-to').value.trim();e.vehicle=document.getElementById('e-vehicle').value.trim();e.purpose=document.getElementById('e-purpose').value.trim();e.kmStart=parseFloat(document.getElementById('e-km-start').value)||0;e.kmEnd=parseFloat(document.getElementById('e-km-end').value)||0;e.km=Math.max(0,e.kmEnd-e.kmStart);entries.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));await syncUp();rE();document.getElementById('edit-modal').classList.remove('show');toast('\u2713 OK')});
 
 // KW
+let showAllKW=false;
 function rKW(){
   const km={};entries.forEach(e=>{const w=getWeek(e.date),k=w.year+'-'+pad(w.week);if(!km[k])km[k]={year:w.year,week:w.week,km:0,c:0};km[k].km+=e.km;km[k].c++});
-  const keys=Object.keys(km).sort(),tbl=document.getElementById('kw-table'),emp=document.getElementById('kw-empty'),body=document.getElementById('kw-body');
+  const keys=Object.keys(km).sort().reverse(),tbl=document.getElementById('kw-table'),emp=document.getElementById('kw-empty'),body=document.getElementById('kw-body');
   if(!keys.length){tbl.style.display='none';emp.style.display='block';return}
   tbl.style.display='table';emp.style.display='none';
-  body.innerHTML=keys.map(k=>{const d=km[k];return'<tr><td><b>KW '+d.week+'</b></td><td style="font-size:11px;color:var(--gy)">'+getWR(d.year,d.week)+'</td><td>'+d.c+'</td><td><span class="badge">'+d.km+'</span></td><td><input type="number" class="kw-input" min="0" max="7" value="'+(kwDays[k]||0)+'" data-kw="'+k+'" onchange="updKW(this)" inputmode="numeric"></td></tr>'}).join('');
+  const visible=showAllKW?keys:keys.slice(0,10);
+  const hidden=keys.length-visible.length;
+  body.innerHTML=visible.map(k=>{const d=km[k];return'<tr><td><b>KW '+d.week+'</b></td><td style="font-size:11px;color:var(--gy)">'+getWR(d.year,d.week)+'</td><td>'+d.c+'</td><td><span class="badge">'+d.km+'</span></td><td><input type="number" class="kw-input" min="0" max="7" value="'+(kwDays[k]||0)+'" data-kw="'+k+'" onchange="updKW(this)" inputmode="numeric"></td></tr>'}).join('')
+  +(hidden>0?'<tr><td colspan="5" style="text-align:center;padding:12px;"><button onclick="showAllKW=true;rKW();" style="background:none;border:1.5px solid var(--bd);border-radius:50px;padding:8px 20px;font-family:var(--fd);font-size:12px;font-weight:600;color:var(--gy);cursor:pointer;">'+hidden+' weitere anzeigen</button></td></tr>':'')
+  +(showAllKW&&keys.length>10?'<tr><td colspan="5" style="text-align:center;padding:12px;"><button onclick="showAllKW=false;rKW();" style="background:none;border:1.5px solid var(--bd);border-radius:50px;padding:8px 20px;font-family:var(--fd);font-size:12px;font-weight:600;color:var(--gy);cursor:pointer;">Weniger anzeigen</button></td></tr>':'');
 }
 async function updKW(el){kwDays[el.dataset.kw]=parseInt(el.value)||0;await syncUp()}
 

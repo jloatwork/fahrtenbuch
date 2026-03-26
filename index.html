@@ -103,7 +103,7 @@
 <body>
 
 <!-- LOGIN SCREEN -->
-<div class="login-screen" id="login-screen">
+<div class="login-screen hidden" id="login-screen">
   <div class="login-box">
     <div class="login-logo">waterdrop<span>&middot;</span>drive</div>
     <div class="login-sub">Fahrtenbuch &amp; Reisekosten</div>
@@ -244,6 +244,7 @@ function checkLogin(){
       if(exp&&Date.now()<exp){showApp();return}
     }catch{}
   }
+  // Not logged in — show login screen
   document.getElementById('login-screen').classList.remove('hidden');
 }
 document.getElementById('login-btn').addEventListener('click',doLogin);
@@ -251,7 +252,6 @@ document.getElementById('login-pw').addEventListener('keydown',e=>{if(e.key==='E
 function doLogin(){
   const pw=document.getElementById('login-pw').value;
   if(pw===APP_PASSWORD){
-    // 30 Tage gültig
     localStorage.setItem(LS,JSON.stringify({exp:Date.now()+30*24*60*60*1000}));
     document.getElementById('login-screen').classList.add('hidden');
     showApp();

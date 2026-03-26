@@ -296,9 +296,15 @@ async function syncDown(){
   setS('error','Fehler');return false;
 }
 async function syncUp(){
+  svL(); // always save locally first
   setS('loading','Speichern...');
-  const[re]=await Promise.all([api('saveEntries',entries),api('saveKwDays',kwDays)]);
-  if(re&&re.success){svL();setS('ok',entries.length+' Fahrten')}else{svL();setS('error','Fehler')}
+  try{
+    const[re,rk]=await Promise.all([api('saveEntries',entries),api('saveKwDays',kwDays)]);
+    if(re&&re.error){setS('error',re.error);console.error('saveEntries:',re.error);return}
+    if(rk&&rk.error){setS('error',rk.error);console.error('saveKwDays:',rk.error);return}
+    if(re&&re.success){setS('ok',entries.length+' Fahrten')}
+    else{setS('error','Sync-Fehler');console.error('saveEntries result:',re)}
+  }catch(e){setS('error','Fehler');console.error(e)}
 }
 
 // ===== AUTOCOMPLETE =====

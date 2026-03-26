@@ -237,7 +237,13 @@ let entries=[],kwDays={},editIdx=-1,tripActive=false;
 
 // ===== LOGIN =====
 function checkLogin(){
-  if(sessionStorage.getItem(LS)==='1'){showApp();return}
+  const saved=localStorage.getItem(LS);
+  if(saved){
+    try{
+      const exp=JSON.parse(saved).exp;
+      if(exp&&Date.now()<exp){showApp();return}
+    }catch{}
+  }
   document.getElementById('login-screen').classList.remove('hidden');
 }
 document.getElementById('login-btn').addEventListener('click',doLogin);
@@ -245,7 +251,8 @@ document.getElementById('login-pw').addEventListener('keydown',e=>{if(e.key==='E
 function doLogin(){
   const pw=document.getElementById('login-pw').value;
   if(pw===APP_PASSWORD){
-    sessionStorage.setItem(LS,'1');
+    // 30 Tage gültig
+    localStorage.setItem(LS,JSON.stringify({exp:Date.now()+30*24*60*60*1000}));
     document.getElementById('login-screen').classList.add('hidden');
     showApp();
   }else{
@@ -316,7 +323,7 @@ function shAC(el,li,f){const v=el.value.toLowerCase(),it=uq(f).filter(x=>x.toLow
 document.querySelectorAll('.tab').forEach(t=>{t.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));t.classList.add('active');document.getElementById('tab-'+t.dataset.tab).classList.add('active');if(t.dataset.tab==='kwuebersicht')rKW();if(t.dataset.tab==='monatsabrechnung')rMo()})});
 
 // ===== FORM =====
-function initForm(){if(entries.length){const l=entries[entries.length-1];if(l.kmEnd)document.getElementById('f-km-start').value=l.kmEnd}restoreTrip()}
+function initForm(){restoreTrip()}
 function calcKm(){const s=parseFloat(document.getElementById('f-km-start').value)||0,e=parseFloat(document.getElementById('f-km-end').value)||0;document.getElementById('km-diff').innerHTML='<small>Gefahrene Kilometer</small>'+Math.max(0,e-s)+' km'}
 document.getElementById('f-km-start').addEventListener('input',calcKm);
 document.getElementById('f-km-end').addEventListener('input',calcKm);

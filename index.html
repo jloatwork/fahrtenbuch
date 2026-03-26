@@ -99,6 +99,9 @@
   @keyframes spin{to{transform:rotate(360deg)}}
   .loading-text{font-family:var(--fd);font-size:13px;color:var(--gy)}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 
@@ -188,7 +191,10 @@
         <div class="summary-card"><div class="summary-value" id="sum-days-euro">€ 0,00</div><div class="summary-label">Tage × 45 €</div></div>
       </div>
       <div class="month-total"><div class="month-total-label">Gesamt Erstattung</div><div class="month-total-value" id="sum-total">€ 0,00</div></div>
-      <div style="margin-top:16px;text-align:center;"><button class="btn btn-export" id="btn-export-csv">&#128228; CSV Export</button></div>
+      <div style="margin-top:16px;text-align:center;display:flex;gap:10px;justify-content:center;">
+        <button class="btn btn-export" id="btn-export-xlsx">&#128196; Excel</button>
+        <button class="btn btn-export" id="btn-export-pdf" style="background:var(--bk);">&#128196; PDF</button>
+      </div>
     </div>
     <div class="card" style="margin-top:10px;">
       <div class="card-title"><div class="icon">&#128203;</div> KW-Details</div>
@@ -509,17 +515,107 @@ function cMo(){
 }
 document.getElementById('month-select').addEventListener('change',cMo);
 
-// CSV
-document.getElementById('btn-export-csv').addEventListener('click',()=>{
-  const sel=document.getElementById('month-select').value;if(!sel)return;
-  const[sy,sm]=sel.split('-').map(Number),me=entries.filter(e=>{const d=new Date(e.date);return d.getFullYear()===sy&&d.getMonth()+1===sm});
-  let csv='Datum;Abfahrt;Ankunft;Von;Nach;Fahrzeug;Zweck;KM Start;KM Ende;km\n';
-  me.forEach(e=>{csv+=fmtD(e.date)+';'+e.time+';'+(e.timeArrival||'')+';'+e.from+';'+e.to+';'+e.vehicle+';'+e.purpose+';'+e.kmStart+';'+e.kmEnd+';'+e.km+'\n'});
-  const tk=me.reduce((s,e)=>s+e.km,0);let td=0;const seen=new Set();
+// EXPORT HELPERS
+function getExportData(){
+  const sel=document.getElementById('month-select').value;if(!sel)return null;
+  const[sy,sm]=sel.split('-').map(Number);
+  const me=entries.filter(e=>{const d=new Date(e.date);return d.getFullYear()===sy&&d.getMonth()+1===sm});
+  const tk=me.reduce((s,e)=>s+e.km,0);
+  let td=0;const seen=new Set();
   me.forEach(e=>{const w=getWeek(e.date),k=w.year+'-'+pad(w.week);if(!seen.has(k)){seen.add(k);td+=(kwDays[k]||0)}});
-  csv+='\n'+mL(sel)+'\nKilometer;'+tk+'\nKilometergeld;'+(tk*.5).toFixed(2)+'\nVerpflegungstage;'+td+'\nVerpflegung;'+(td*45).toFixed(2)+'\nGESAMT;'+(tk*.5+td*45).toFixed(2)+'\n';
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}));
-  a.download='Fahrtenbuch_'+sel+'.csv';a.click();toast('CSV exportiert');
+  return{sel,me,tk,td,ke:tk*.5,de:td*45,label:mL(sel)};
+}
+
+// XLSX EXPORT
+document.getElementById('btn-export-xlsx').addEventListener('click',()=>{
+  const d=getExportData();if(!d)return;
+  const header=['Datum','Abfahrt','Ankunft','Von','Nach','Fahrzeug','Zweck','KM Start','KM Ende','Kilometer'];
+  const rows=d.me.map(e=>[fmtD(e.date),e.time,e.timeArrival||'',e.from,e.to,e.vehicle,e.purpose,e.kmStart,e.kmEnd,e.km]);
+  // Add empty row + summary
+  rows.push([]);
+  rows.push(['Zusammenfassung '+d.label]);
+  rows.push(['Kilometer gesamt','','','','','','','','',d.tk]);
+  rows.push(['Kilometergeld ('+d.tk+' x 0,50)','','','','','','','','',d.ke.toFixed(2)]);
+  rows.push(['Verpflegungstage','','','','','','','','',d.td]);
+  rows.push(['Verpflegungspauschale ('+d.td+' x 45,00)','','','','','','','','',d.de.toFixed(2)]);
+  rows.push([]);
+  rows.push(['GESAMTERSTATTUNG','','','','','','','','',(d.ke+d.de).toFixed(2)]);
+
+  const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
+  // Column widths
+  ws['!cols']=[{wch:12},{wch:8},{wch:8},{wch:30},{wch:30},{wch:22},{wch:25},{wch:10},{wch:10},{wch:12}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Fahrtenbuch');
+  XLSX.writeFile(wb,'Fahrtenbuch_'+d.sel+'.xlsx');
+  toast('Excel exportiert');
+});
+
+// PDF EXPORT
+document.getElementById('btn-export-pdf').addEventListener('click',()=>{
+  const d=getExportData();if(!d)return;
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+
+  // Title
+  doc.setFontSize(16);
+  doc.setFont('helvetica','bold');
+  doc.text('Fahrtenbuch \u2013 '+d.label,14,18);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica','normal');
+  doc.text('Erstellt am '+fmtD(new Date().toISOString().slice(0,10)),14,24);
+
+  // Entries table
+  const head=[['Datum','Abfahrt','Ankunft','Von','Nach','Fahrzeug','Zweck','KM Start','KM Ende','km']];
+  const body=d.me.map(e=>[fmtD(e.date),e.time,e.timeArrival||'',e.from,e.to,e.vehicle,e.purpose,e.kmStart,e.kmEnd,e.km]);
+
+  doc.autoTable({
+    head:head,
+    body:body,
+    startY:28,
+    styles:{fontSize:8,cellPadding:2},
+    headStyles:{fillColor:[26,26,26],textColor:[255,255,255],fontStyle:'bold',fontSize:8},
+    alternateRowStyles:{fillColor:[245,245,245]},
+    columnStyles:{
+      0:{cellWidth:20},1:{cellWidth:14},2:{cellWidth:14},
+      3:{cellWidth:40},4:{cellWidth:40},5:{cellWidth:30},
+      6:{cellWidth:35},7:{cellWidth:18,halign:'right'},8:{cellWidth:18,halign:'right'},9:{cellWidth:14,halign:'right'}
+    },
+    margin:{left:14,right:14}
+  });
+
+  // Summary box
+  const y=doc.lastAutoTable.finalY+10;
+  doc.setFillColor(245,245,245);
+  doc.roundedRect(14,y,130,52,3,3,'F');
+
+  doc.setFontSize(11);
+  doc.setFont('helvetica','bold');
+  doc.text('Zusammenfassung',20,y+9);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica','normal');
+  const lines=[
+    ['Kilometer gesamt:',d.tk+' km'],
+    ['Kilometergeld ('+d.tk+' x 0,50 \u20AC):',fmtE(d.ke)],
+    ['Verpflegungstage:',d.td+' Tage'],
+    ['Verpflegungspauschale ('+d.td+' x 45 \u20AC):',fmtE(d.de)],
+  ];
+  lines.forEach((l,i)=>{
+    doc.text(l[0],20,y+18+i*7);
+    doc.text(l[1],110,y+18+i*7,{align:'right'});
+  });
+
+  doc.setDrawColor(26,26,26);
+  doc.line(20,y+44,130,y+44);
+
+  doc.setFontSize(11);
+  doc.setFont('helvetica','bold');
+  doc.text('GESAMTERSTATTUNG:',20,y+50);
+  doc.text(fmtE(d.ke+d.de),110,y+50,{align:'right'});
+
+  doc.save('Fahrtenbuch_'+d.sel+'.pdf');
+  toast('PDF exportiert');
 });
 
 // INIT

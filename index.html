@@ -372,11 +372,18 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
 });
 
 // ENTRIES TABLE
+let showAllEntries=false;
 function rE(){
   const body=document.getElementById('entries-body'),tbl=document.getElementById('entries-table'),emp=document.getElementById('entries-empty'),clr=document.getElementById('btn-clear-all');
   if(!entries.length){tbl.style.display='none';emp.style.display='block';clr.style.display='none';return}
   tbl.style.display='table';emp.style.display='none';clr.style.display='inline-flex';
-  body.innerHTML=entries.map((e,i)=>'<tr style="cursor:pointer" onclick="openEdit('+i+')"><td><b>'+fmtD(e.date)+'</b><br><span style="font-size:11px;color:var(--gy)">'+(e.time||'')+'\u2192'+(e.timeArrival||'')+'</span></td><td style="font-size:12px">'+e.from+' \u2192 '+e.to+'</td><td style="font-size:12px">'+e.purpose+'</td><td><span class="badge">'+e.km+'</span></td><td><button class="delete-btn" onclick="event.stopPropagation();delE('+i+')">\u2715</button></td></tr>').join('');
+  // Show newest first, max 10 unless "show all"
+  const sorted=entries.map((e,i)=>({e,i})).sort((a,b)=>(b.e.date+b.e.time).localeCompare(a.e.date+a.e.time));
+  const visible=showAllEntries?sorted:sorted.slice(0,10);
+  const hidden=entries.length-visible.length;
+  body.innerHTML=visible.map(({e,i})=>'<tr style="cursor:pointer" onclick="openEdit('+i+')"><td><b>'+fmtD(e.date)+'</b><br><span style="font-size:11px;color:var(--gy)">'+(e.time||'')+'\u2192'+(e.timeArrival||'')+'</span></td><td style="font-size:12px">'+e.from+' \u2192 '+e.to+'</td><td style="font-size:12px">'+e.purpose+'</td><td><span class="badge">'+e.km+'</span></td><td><button class="delete-btn" onclick="event.stopPropagation();delE('+i+')">\u2715</button></td></tr>').join('')
+  +(hidden>0?'<tr><td colspan="5" style="text-align:center;padding:12px;"><button onclick="showAllEntries=true;rE();" style="background:none;border:1.5px solid var(--bd);border-radius:50px;padding:8px 20px;font-family:var(--fd);font-size:12px;font-weight:600;color:var(--gy);cursor:pointer;">'+hidden+' weitere anzeigen</button></td></tr>':'')
+  +(showAllEntries&&entries.length>10?'<tr><td colspan="5" style="text-align:center;padding:12px;"><button onclick="showAllEntries=false;rE();" style="background:none;border:1.5px solid var(--bd);border-radius:50px;padding:8px 20px;font-family:var(--fd);font-size:12px;font-weight:600;color:var(--gy);cursor:pointer;">Weniger anzeigen</button></td></tr>':'');
 }
 async function delE(i){if(!confirm('Löschen?'))return;entries.splice(i,1);await syncUp();rE();toast('Gelöscht')}
 document.getElementById('btn-clear-all').addEventListener('click',async()=>{if(!confirm('ALLE löschen?'))return;entries=[];kwDays={};await syncUp();rE();toast('Gelöscht')});

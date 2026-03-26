@@ -314,10 +314,57 @@ async function syncUp(){
   }catch(e){setS('error','Fehler');console.error(e)}
 }
 
-// ===== AUTOCOMPLETE =====
-function uq(f){return[...new Set(entries.map(e=>e[f]).filter(Boolean))]}
-function sAC(i,l,f){const el=document.getElementById(i),li=document.getElementById(l);el.addEventListener('focus',()=>shAC(el,li,f));el.addEventListener('input',()=>shAC(el,li,f));document.addEventListener('click',e=>{if(!el.contains(e.target)&&!li.contains(e.target))li.classList.remove('show')})}
-function shAC(el,li,f){const v=el.value.toLowerCase(),it=uq(f).filter(x=>x.toLowerCase().includes(v));if(!it.length){li.classList.remove('show');return}li.innerHTML=it.map(x=>'<div class="autocomplete-item">'+x+'</div>').join('');li.classList.add('show');li.querySelectorAll('.autocomplete-item').forEach(a=>{a.addEventListener('click',()=>{el.value=a.textContent;li.classList.remove('show')})})}
+// ===== AUTOCOMPLETE (sorted by frequency) =====
+function uqSorted(f){
+  const counts={};
+  entries.forEach(e=>{const v=e[f];if(v){counts[v]=(counts[v]||0)+1}});
+  return Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+}
+function sAC(i,l,f){
+  const el=document.getElementById(i),li=document.getElementById(l);
+  el.addEventListener('focus',()=>shAC(el,li,f));
+  el.addEventListener('input',()=>{shAC(el,li,f);if(f==='from'||f==='to')autoPurpose()});
+  document.addEventListener('click',e=>{if(!el.contains(e.target)&&!li.contains(e.target))li.classList.remove('show')});
+}
+function shAC(el,li,f){
+  const v=el.value.toLowerCase();
+  const items=uqSorted(f).filter(x=>x.toLowerCase().includes(v));
+  if(!items.length){li.classList.remove('show');return}
+  li.innerHTML=items.map(x=>'<div class="autocomplete-item">'+x+'</div>').join('');
+  li.classList.add('show');
+  li.querySelectorAll('.autocomplete-item').forEach(a=>{
+    a.addEventListener('click',()=>{
+      el.value=a.textContent;
+      li.classList.remove('show');
+      if(f==='from'||f==='to')autoPurpose();
+    });
+  });
+}
+
+// Auto-fill purpose based on Von→Nach combination
+function autoPurpose(){
+  const from=document.getElementById('f-from').value.trim();
+  const to=document.getElementById('f-to').value.trim();
+  const purposeEl=document.getElementById('f-purpose');
+  // Only auto-fill if purpose is empty and we have both from and to
+  if(purposeEl.value.trim()||!from||!to)return;
+  // Find most recent entry with same from→to
+  for(let i=entries.length-1;i>=0;i--){
+    const e=entries[i];
+    if(e.from===from&&e.to===to&&e.purpose){
+      purposeEl.value=e.purpose;
+      return;
+    }
+  }
+  // Also check reverse route
+  for(let i=entries.length-1;i>=0;i--){
+    const e=entries[i];
+    if(e.from===to&&e.to===from&&e.purpose){
+      purposeEl.value=e.purpose;
+      return;
+    }
+  }
+}
 
 // ===== TABS =====
 document.querySelectorAll('.tab').forEach(t=>{t.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));t.classList.add('active');document.getElementById('tab-'+t.dataset.tab).classList.add('active');if(t.dataset.tab==='kwuebersicht')rKW();if(t.dataset.tab==='monatsabrechnung')rMo()})});
@@ -329,6 +376,36 @@ document.getElementById('f-km-start').addEventListener('input',calcKm);
 document.getElementById('f-km-end').addEventListener('input',calcKm);
 
 // START/STOP
+function getAddress(field){
+  if(!navigator.geolocation){return}
+  const el=document.getElementById(field);
+  el.value='Standort wird ermittelt...';
+  navigator.geolocation.getCurrentPosition(
+    function(pos){
+      const lat=pos.coords.latitude,lon=pos.coords.longitude;
+      // Reverse geocode via Nominatim (OpenStreetMap)
+      const url='https://nominatim.openstreetmap.org/reverse?format=json&lat='+lat+'&lon='+lon+'&zoom=18&addressdetails=1';
+      fetch(url,{headers:{'Accept-Language':'de'}})
+        .then(r=>r.json())
+        .then(data=>{
+          if(data&&data.address){
+            const a=data.address;
+            // Build a readable address
+            const parts=[];
+            if(a.road)parts.push(a.road+(a.house_number?' '+a.house_number:''));
+            if(a.postcode||a.city||a.town||a.village)parts.push((a.postcode||'')+' '+(a.city||a.town||a.village||''));
+            el.value=parts.join(', ')||data.display_name||'';
+          }else{
+            el.value=lat.toFixed(5)+', '+lon.toFixed(5);
+          }
+        })
+        .catch(()=>{el.value=lat.toFixed(5)+', '+lon.toFixed(5)});
+    },
+    function(){el.value='';toast('Standort nicht verfügbar')},
+    {enableHighAccuracy:true,timeout:10000}
+  );
+}
+
 function stampStart(){
   const lk=entries.length?entries[entries.length-1].kmEnd:0;
   openKm('Abfahrt','KM bei Abfahrt',lk,function(km){
@@ -336,12 +413,16 @@ function stampStart(){
     document.getElementById('f-time-arrival').value='';document.getElementById('f-km-start').value=km;document.getElementById('f-km-end').value='';calcKm();
     tripActive=true;localStorage.setItem('wdp_trip',JSON.stringify({date:n.date,time:n.time,kmStart:km}));
     updateTrip();toast('\u25B6 '+n.time+' \u2013 '+km+' km');
+    // Auto-fill departure address
+    getAddress('f-from');
   });
 }
 function stampStop(){
   openKm('Ankunft','KM bei Ankunft',0,function(km){
     const n=now();document.getElementById('f-time-arrival').value=n.time;document.getElementById('f-km-end').value=km;calcKm();
     tripActive=false;localStorage.removeItem('wdp_trip');updateTrip();toast('\u25A0 '+n.time+' \u2013 '+km+' km');
+    // Auto-fill arrival address
+    getAddress('f-to');
   });
 }
 let _kc=null;

@@ -100,8 +100,6 @@
   .loading-text{font-family:var(--fd);font-size:13px;color:var(--gy)}
 </style>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 
@@ -151,7 +149,10 @@
         <div class="form-group"><label class="form-label">KM Stand Abfahrt</label><input type="number" id="f-km-start" class="form-input" placeholder="z.B. 42000" inputmode="numeric"></div>
         <div class="form-group"><label class="form-label">KM Stand Ankunft</label><input type="number" id="f-km-end" class="form-input" placeholder="z.B. 42350" inputmode="numeric"></div>
         <div class="form-group full"><div class="km-result" id="km-diff"><small>Gefahrene Kilometer</small>0 km</div></div>
-        <div class="form-group full"><button class="btn btn-primary" id="btn-save">&#10003; Fahrt speichern</button></div>
+        <div class="form-group full" style="display:flex;gap:10px;">
+          <button class="btn btn-primary" id="btn-save" style="flex:1;">&#10003; Fahrt speichern</button>
+          <button class="btn btn-secondary" id="btn-clear-form" style="width:auto;padding:12px 18px;font-size:13px;">&#128465; Leeren</button>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -193,7 +194,7 @@
       <div class="month-total"><div class="month-total-label">Gesamt Erstattung</div><div class="month-total-value" id="sum-total">€ 0,00</div></div>
       <div style="margin-top:16px;text-align:center;display:flex;gap:10px;justify-content:center;">
         <button class="btn btn-export" id="btn-export-xlsx">&#128196; Excel</button>
-        <button class="btn btn-export" id="btn-export-pdf" style="background:var(--bk);">&#128196; PDF</button>
+        <button class="btn btn-export" id="btn-export-print" style="background:var(--bk);">&#128424; Drucken / PDF</button>
       </div>
     </div>
     <div class="card" style="margin-top:10px;">
@@ -449,6 +450,15 @@ function updateTrip(){
 }
 function restoreTrip(){const s=localStorage.getItem('wdp_trip');if(s){try{const d=JSON.parse(s);document.getElementById('f-date').value=d.date;document.getElementById('f-time').value=d.time;if(d.kmStart)document.getElementById('f-km-start').value=d.kmStart;if(d.fromAddr)document.getElementById('f-from').value=d.fromAddr;tripActive=true}catch{tripActive=false}}else{tripActive=false}updateTrip()}
 
+// CLEAR FORM
+document.getElementById('btn-clear-form').addEventListener('click',()=>{
+  ['f-date','f-time','f-time-arrival','f-from','f-to','f-purpose','f-km-start','f-km-end'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-vehicle').value='FORD Focus S-147XX';
+  document.getElementById('km-diff').innerHTML='<small>Gefahrene Kilometer</small>0 km';
+  tripActive=false;localStorage.removeItem('wdp_trip');updateTrip();
+  toast('Formular geleert');
+});
+
 // SAVE
 document.getElementById('btn-save').addEventListener('click',async()=>{
   const e={date:document.getElementById('f-date').value,time:document.getElementById('f-time').value,timeArrival:document.getElementById('f-time-arrival').value,from:document.getElementById('f-from').value.trim(),to:document.getElementById('f-to').value.trim(),vehicle:document.getElementById('f-vehicle').value.trim(),purpose:document.getElementById('f-purpose').value.trim(),kmStart:parseFloat(document.getElementById('f-km-start').value)||0,kmEnd:parseFloat(document.getElementById('f-km-end').value)||0};
@@ -555,70 +565,56 @@ document.getElementById('btn-export-xlsx').addEventListener('click',()=>{
   toast('Excel exportiert');
 });
 
-// PDF EXPORT
-document.getElementById('btn-export-pdf').addEventListener('click',()=>{
+// PRINT / PDF EXPORT
+document.getElementById('btn-export-print').addEventListener('click',()=>{
   const d=getExportData();if(!d)return;
-  try{
-    const jsPDF=window.jspdf&&window.jspdf.jsPDF?window.jspdf.jsPDF:window.jsPDF;
-    if(!jsPDF){toast('PDF-Bibliothek nicht geladen');return}
-    const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  const rows=d.me.map(e=>'<tr><td>'+fmtD(e.date)+'</td><td>'+(e.time||'')+'</td><td>'+(e.timeArrival||'')+'</td><td>'+e.from+'</td><td>'+e.to+'</td><td>'+e.vehicle+'</td><td>'+e.purpose+'</td><td style="text-align:right">'+e.kmStart+'</td><td style="text-align:right">'+e.kmEnd+'</td><td style="text-align:right">'+e.km+'</td></tr>').join('');
 
-    doc.setFontSize(16);
-    doc.setFont('helvetica','bold');
-    doc.text('Fahrtenbuch \u2013 '+d.label,14,18);
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Fahrtenbuch ${d.label}</title>
+<style>
+  @page{size:landscape;margin:12mm}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:Arial,sans-serif;color:#1a1a1a;font-size:9pt;padding:10mm}
+  h1{font-size:16pt;margin-bottom:2mm}
+  .sub{font-size:9pt;color:#666;margin-bottom:6mm}
+  table{width:100%;border-collapse:collapse;margin-bottom:8mm}
+  th{background:#1a1a1a;color:#fff;font-size:8pt;text-align:left;padding:4px 6px;font-weight:600}
+  td{padding:4px 6px;border-bottom:1px solid #ddd;font-size:8pt}
+  tr:nth-child(even) td{background:#f5f5f5}
+  .summary{background:#f5f5f5;border-radius:6px;padding:12px 16px;max-width:400px;margin-top:4mm}
+  .summary h2{font-size:11pt;margin-bottom:6px}
+  .row{display:flex;justify-content:space-between;padding:3px 0;font-size:9pt}
+  .row.total{border-top:2px solid #1a1a1a;margin-top:6px;padding-top:6px;font-weight:700;font-size:11pt}
+  .footer{margin-top:15mm;font-size:8pt;color:#999;border-top:1px solid #ddd;padding-top:4mm}
+  .sig{display:flex;gap:60px;margin-top:12mm}
+  .sig-line{border-top:1px solid #1a1a1a;width:180px;padding-top:3px;font-size:8pt;color:#666}
+  @media print{body{padding:0}.no-print{display:none}}
+</style></head><body>
+<h1>Fahrtenbuch \u2013 ${d.label}</h1>
+<div class="sub">Waterdrop Production GmbH &middot; Erstellt am ${fmtD(new Date().toISOString().slice(0,10))}</div>
+<table>
+<thead><tr><th>Datum</th><th>Abfahrt</th><th>Ankunft</th><th>Von</th><th>Nach</th><th>Fahrzeug</th><th>Zweck</th><th style="text-align:right">KM Start</th><th style="text-align:right">KM Ende</th><th style="text-align:right">km</th></tr></thead>
+<tbody>${rows}</tbody>
+</table>
+<div class="summary">
+  <h2>Zusammenfassung</h2>
+  <div class="row"><span>Kilometer gesamt:</span><span>${d.tk} km</span></div>
+  <div class="row"><span>Kilometergeld netto (${d.tk} &times; 0,50 &euro;):</span><span>${fmtE(d.ke)}</span></div>
+  <div class="row"><span>Verpflegungstage:</span><span>${d.td} Tage</span></div>
+  <div class="row"><span>Verpflegungspauschale (${d.td} &times; 45 &euro;):</span><span>${fmtE(d.de)}</span></div>
+  <div class="row total"><span>GESAMTERSTATTUNG:</span><span>${fmtE(d.ke+d.de)}</span></div>
+</div>
+<div class="sig">
+  <div><div class="sig-line">Datum, Unterschrift Mitarbeiter</div></div>
+  <div><div class="sig-line">Datum, Unterschrift Vorgesetzter</div></div>
+</div>
+<div class="footer">Fahrtenbuch generiert aus waterdrop&middot;drive</div>
+<script>window.onload=function(){window.print()}<\/script>
+</body></html>`;
 
-    doc.setFontSize(9);
-    doc.setFont('helvetica','normal');
-    doc.text('Erstellt am '+fmtD(new Date().toISOString().slice(0,10)),14,24);
-
-    const head=[['Datum','Abfahrt','Ankunft','Von','Nach','Fahrzeug','Zweck','KM Start','KM Ende','km']];
-    const body=d.me.map(e=>[fmtD(e.date),e.time||'',e.timeArrival||'',e.from,e.to,e.vehicle,e.purpose,String(e.kmStart),String(e.kmEnd),String(e.km)]);
-
-    doc.autoTable({
-      head:head,
-      body:body,
-      startY:28,
-      styles:{fontSize:8,cellPadding:2},
-      headStyles:{fillColor:[26,26,26],textColor:[255,255,255],fontStyle:'bold',fontSize:8},
-      alternateRowStyles:{fillColor:[245,245,245]},
-      margin:{left:14,right:14}
-    });
-
-    const y=(doc.lastAutoTable?doc.lastAutoTable.finalY:doc.previousAutoTable?doc.previousAutoTable.finalY:80)+10;
-    doc.setFillColor(245,245,245);
-    doc.roundedRect(14,y,140,52,3,3,'F');
-
-    doc.setFontSize(11);
-    doc.setFont('helvetica','bold');
-    doc.text('Zusammenfassung',20,y+9);
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica','normal');
-    const lines=[
-      ['Kilometer gesamt:',d.tk+' km'],
-      ['Kilometergeld netto ('+d.tk+' x 0,50 \u20AC):',fmtE(d.ke)],
-      ['Verpflegungstage:',d.td+' Tage'],
-      ['Verpflegungspauschale ('+d.td+' x 45 \u20AC):',fmtE(d.de)],
-    ];
-    lines.forEach((l,i)=>{
-      doc.text(l[0],20,y+18+i*7);
-      doc.text(l[1],120,y+18+i*7,{align:'right'});
-    });
-
-    doc.setDrawColor(26,26,26);
-    doc.line(20,y+44,140,y+44);
-
-    doc.setFontSize(11);
-    doc.setFont('helvetica','bold');
-    doc.text('GESAMTERSTATTUNG:',20,y+50);
-    doc.text(fmtE(d.ke+d.de),120,y+50,{align:'right'});
-
-    doc.save('Fahrtenbuch_'+d.sel+'.pdf');
-    toast('PDF exportiert');
-  }catch(err){
-    console.error('PDF error:',err);
-    toast('PDF-Fehler: '+err.message);
-  }
+  const w=window.open('','_blank');
+  if(w){w.document.write(html);w.document.close()}
+  else{toast('Popup blockiert \u2013 bitte Popup-Blocker deaktivieren')}
 });
 
 // INIT

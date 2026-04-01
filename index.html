@@ -604,10 +604,6 @@ document.getElementById('btn-export-print').addEventListener('click',()=>{
   <div class="row"><span>Verpflegungspauschale (${d.td} &times; 45 &euro;):</span><span>${fmtE(d.de)}</span></div>
   <div class="row total"><span>GESAMTERSTATTUNG:</span><span>${fmtE(d.ke+d.de)}</span></div>
 </div>
-<div class="sig">
-  <div><div class="sig-line">Datum, Unterschrift Mitarbeiter</div></div>
-  <div><div class="sig-line">Datum, Unterschrift Vorgesetzter</div></div>
-</div>
 <div class="footer">Fahrtenbuch generiert aus waterdrop&middot;drive</div>
 <script>window.onload=function(){window.print()}<\/script>
 </body></html>`;

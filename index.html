@@ -99,7 +99,7 @@
   @keyframes spin{to{transform:rotate(360deg)}}
   .loading-text{font-family:var(--fd);font-size:13px;color:var(--gy)}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
 </head>
@@ -186,7 +186,7 @@
       <div class="month-selector"><select id="month-select"></select></div>
       <div class="summary-grid">
         <div class="summary-card"><div class="summary-value" id="sum-km">0</div><div class="summary-label">Kilometer</div></div>
-        <div class="summary-card"><div class="summary-value" id="sum-km-euro">€ 0,00</div><div class="summary-label">km × 0,50 €</div></div>
+        <div class="summary-card"><div class="summary-value" id="sum-km-euro">€ 0,00</div><div class="summary-label">km × 0,50 € netto</div></div>
         <div class="summary-card"><div class="summary-value" id="sum-days">0</div><div class="summary-label">Verpfl.-Tage</div></div>
         <div class="summary-card"><div class="summary-value" id="sum-days-euro">€ 0,00</div><div class="summary-label">Tage × 45 €</div></div>
       </div>
@@ -389,25 +389,30 @@ function getAddress(field){
   navigator.geolocation.getCurrentPosition(
     function(pos){
       const lat=pos.coords.latitude,lon=pos.coords.longitude;
-      // Reverse geocode via Nominatim (OpenStreetMap)
       const url='https://nominatim.openstreetmap.org/reverse?format=json&lat='+lat+'&lon='+lon+'&zoom=18&addressdetails=1';
       fetch(url,{headers:{'Accept-Language':'de'}})
         .then(r=>r.json())
         .then(data=>{
+          let addr='';
           if(data&&data.address){
             const a=data.address;
-            // Build a readable address
             const parts=[];
             if(a.road)parts.push(a.road+(a.house_number?' '+a.house_number:''));
             if(a.postcode||a.city||a.town||a.village)parts.push((a.postcode||'')+' '+(a.city||a.town||a.village||''));
-            el.value=parts.join(', ')||data.display_name||'';
+            addr=parts.join(', ')||data.display_name||'';
           }else{
-            el.value=lat.toFixed(5)+', '+lon.toFixed(5);
+            addr=lat.toFixed(5)+', '+lon.toFixed(5);
+          }
+          el.value=addr;
+          // Save address to trip state if trip is active
+          if(field==='f-from'){
+            const s=localStorage.getItem('wdp_trip');
+            if(s){try{const d=JSON.parse(s);d.fromAddr=addr;localStorage.setItem('wdp_trip',JSON.stringify(d))}catch{}}
           }
         })
         .catch(()=>{el.value=lat.toFixed(5)+', '+lon.toFixed(5)});
     },
-    function(){el.value='';toast('Standort nicht verfügbar')},
+    function(){el.value='';toast('Standort nicht verf\u00FCgbar')},
     {enableHighAccuracy:true,timeout:10000}
   );
 }
@@ -442,7 +447,7 @@ function updateTrip(){
   if(tripActive){bs.disabled=true;bs.classList.add('active');be.disabled=false;st.style.display='block';tx.innerHTML='\u{1F7E2} Seit <b>'+document.getElementById('f-time').value+'</b> ('+document.getElementById('f-km-start').value+' km)'}
   else{bs.disabled=false;bs.classList.remove('active');be.disabled=true;st.style.display='none'}
 }
-function restoreTrip(){const s=localStorage.getItem('wdp_trip');if(s){try{const d=JSON.parse(s);document.getElementById('f-date').value=d.date;document.getElementById('f-time').value=d.time;if(d.kmStart)document.getElementById('f-km-start').value=d.kmStart;tripActive=true}catch{tripActive=false}}else{tripActive=false}updateTrip()}
+function restoreTrip(){const s=localStorage.getItem('wdp_trip');if(s){try{const d=JSON.parse(s);document.getElementById('f-date').value=d.date;document.getElementById('f-time').value=d.time;if(d.kmStart)document.getElementById('f-km-start').value=d.kmStart;if(d.fromAddr)document.getElementById('f-from').value=d.fromAddr;tripActive=true}catch{tripActive=false}}else{tripActive=false}updateTrip()}
 
 // SAVE
 document.getElementById('btn-save').addEventListener('click',async()=>{
@@ -535,7 +540,7 @@ document.getElementById('btn-export-xlsx').addEventListener('click',()=>{
   rows.push([]);
   rows.push(['Zusammenfassung '+d.label]);
   rows.push(['Kilometer gesamt','','','','','','','','',d.tk]);
-  rows.push(['Kilometergeld ('+d.tk+' x 0,50)','','','','','','','','',d.ke.toFixed(2)]);
+  rows.push(['Kilometergeld netto ('+d.tk+' x 0,50)','','','','','','','','',d.ke.toFixed(2)]);
   rows.push(['Verpflegungstage','','','','','','','','',d.td]);
   rows.push(['Verpflegungspauschale ('+d.td+' x 45,00)','','','','','','','','',d.de.toFixed(2)]);
   rows.push([]);
@@ -553,69 +558,67 @@ document.getElementById('btn-export-xlsx').addEventListener('click',()=>{
 // PDF EXPORT
 document.getElementById('btn-export-pdf').addEventListener('click',()=>{
   const d=getExportData();if(!d)return;
-  const{jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  try{
+    const jsPDF=window.jspdf&&window.jspdf.jsPDF?window.jspdf.jsPDF:window.jsPDF;
+    if(!jsPDF){toast('PDF-Bibliothek nicht geladen');return}
+    const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
 
-  // Title
-  doc.setFontSize(16);
-  doc.setFont('helvetica','bold');
-  doc.text('Fahrtenbuch \u2013 '+d.label,14,18);
+    doc.setFontSize(16);
+    doc.setFont('helvetica','bold');
+    doc.text('Fahrtenbuch \u2013 '+d.label,14,18);
 
-  doc.setFontSize(9);
-  doc.setFont('helvetica','normal');
-  doc.text('Erstellt am '+fmtD(new Date().toISOString().slice(0,10)),14,24);
+    doc.setFontSize(9);
+    doc.setFont('helvetica','normal');
+    doc.text('Erstellt am '+fmtD(new Date().toISOString().slice(0,10)),14,24);
 
-  // Entries table
-  const head=[['Datum','Abfahrt','Ankunft','Von','Nach','Fahrzeug','Zweck','KM Start','KM Ende','km']];
-  const body=d.me.map(e=>[fmtD(e.date),e.time,e.timeArrival||'',e.from,e.to,e.vehicle,e.purpose,e.kmStart,e.kmEnd,e.km]);
+    const head=[['Datum','Abfahrt','Ankunft','Von','Nach','Fahrzeug','Zweck','KM Start','KM Ende','km']];
+    const body=d.me.map(e=>[fmtD(e.date),e.time||'',e.timeArrival||'',e.from,e.to,e.vehicle,e.purpose,String(e.kmStart),String(e.kmEnd),String(e.km)]);
 
-  doc.autoTable({
-    head:head,
-    body:body,
-    startY:28,
-    styles:{fontSize:8,cellPadding:2},
-    headStyles:{fillColor:[26,26,26],textColor:[255,255,255],fontStyle:'bold',fontSize:8},
-    alternateRowStyles:{fillColor:[245,245,245]},
-    columnStyles:{
-      0:{cellWidth:20},1:{cellWidth:14},2:{cellWidth:14},
-      3:{cellWidth:40},4:{cellWidth:40},5:{cellWidth:30},
-      6:{cellWidth:35},7:{cellWidth:18,halign:'right'},8:{cellWidth:18,halign:'right'},9:{cellWidth:14,halign:'right'}
-    },
-    margin:{left:14,right:14}
-  });
+    doc.autoTable({
+      head:head,
+      body:body,
+      startY:28,
+      styles:{fontSize:8,cellPadding:2},
+      headStyles:{fillColor:[26,26,26],textColor:[255,255,255],fontStyle:'bold',fontSize:8},
+      alternateRowStyles:{fillColor:[245,245,245]},
+      margin:{left:14,right:14}
+    });
 
-  // Summary box
-  const y=doc.lastAutoTable.finalY+10;
-  doc.setFillColor(245,245,245);
-  doc.roundedRect(14,y,130,52,3,3,'F');
+    const y=(doc.lastAutoTable?doc.lastAutoTable.finalY:doc.previousAutoTable?doc.previousAutoTable.finalY:80)+10;
+    doc.setFillColor(245,245,245);
+    doc.roundedRect(14,y,140,52,3,3,'F');
 
-  doc.setFontSize(11);
-  doc.setFont('helvetica','bold');
-  doc.text('Zusammenfassung',20,y+9);
+    doc.setFontSize(11);
+    doc.setFont('helvetica','bold');
+    doc.text('Zusammenfassung',20,y+9);
 
-  doc.setFontSize(9);
-  doc.setFont('helvetica','normal');
-  const lines=[
-    ['Kilometer gesamt:',d.tk+' km'],
-    ['Kilometergeld ('+d.tk+' x 0,50 \u20AC):',fmtE(d.ke)],
-    ['Verpflegungstage:',d.td+' Tage'],
-    ['Verpflegungspauschale ('+d.td+' x 45 \u20AC):',fmtE(d.de)],
-  ];
-  lines.forEach((l,i)=>{
-    doc.text(l[0],20,y+18+i*7);
-    doc.text(l[1],110,y+18+i*7,{align:'right'});
-  });
+    doc.setFontSize(9);
+    doc.setFont('helvetica','normal');
+    const lines=[
+      ['Kilometer gesamt:',d.tk+' km'],
+      ['Kilometergeld netto ('+d.tk+' x 0,50 \u20AC):',fmtE(d.ke)],
+      ['Verpflegungstage:',d.td+' Tage'],
+      ['Verpflegungspauschale ('+d.td+' x 45 \u20AC):',fmtE(d.de)],
+    ];
+    lines.forEach((l,i)=>{
+      doc.text(l[0],20,y+18+i*7);
+      doc.text(l[1],120,y+18+i*7,{align:'right'});
+    });
 
-  doc.setDrawColor(26,26,26);
-  doc.line(20,y+44,130,y+44);
+    doc.setDrawColor(26,26,26);
+    doc.line(20,y+44,140,y+44);
 
-  doc.setFontSize(11);
-  doc.setFont('helvetica','bold');
-  doc.text('GESAMTERSTATTUNG:',20,y+50);
-  doc.text(fmtE(d.ke+d.de),110,y+50,{align:'right'});
+    doc.setFontSize(11);
+    doc.setFont('helvetica','bold');
+    doc.text('GESAMTERSTATTUNG:',20,y+50);
+    doc.text(fmtE(d.ke+d.de),120,y+50,{align:'right'});
 
-  doc.save('Fahrtenbuch_'+d.sel+'.pdf');
-  toast('PDF exportiert');
+    doc.save('Fahrtenbuch_'+d.sel+'.pdf');
+    toast('PDF exportiert');
+  }catch(err){
+    console.error('PDF error:',err);
+    toast('PDF-Fehler: '+err.message);
+  }
 });
 
 // INIT

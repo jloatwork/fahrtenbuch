@@ -221,13 +221,14 @@
     <div class="form-group full"><label class="form-label">Zweck</label><input type="text" id="e-purpose" class="form-input"></div>
     <div class="form-group"><label class="form-label">KM Start</label><input type="number" id="e-km-start" class="form-input" inputmode="numeric"></div>
     <div class="form-group"><label class="form-label">KM Ende</label><input type="number" id="e-km-end" class="form-input" inputmode="numeric"></div>
+    <div class="form-group full"><div class="km-result" id="e-km-diff"><small>Gefahrene Kilometer</small>0 km</div></div>
   </div>
   <div class="modal-actions"><button class="btn btn-secondary" id="btn-edit-cancel">Abbrechen</button><button class="btn btn-primary" id="btn-edit-save" style="width:auto;flex:1;">Speichern</button></div>
 </div></div>
 
 <div class="modal-overlay" id="km-modal"><div class="modal" style="max-width:360px;">
   <div class="modal-title" id="km-modal-title">KM-Stand</div>
-  <div class="form-group"><label class="form-label" id="km-modal-label">Kilometerstand</label><input type="number" id="km-modal-input" class="form-input" placeholder="z.B. 96448" style="font-size:22px;text-align:center;font-weight:600;" inputmode="numeric"></div>
+  <div class="form-group"><label class="form-label" id="km-modal-label">Kilometerstand</label><input type="number" id="km-modal-input" class="form-input" placeholder="z.B. 96448" style="font-size:22px;text-align:center;font-weight:600;" inputmode="numeric" min="0"></div>
   <div class="modal-actions" style="margin-top:14px;"><button class="btn btn-secondary" id="km-modal-cancel">Abbrechen</button><button class="btn btn-primary" id="km-modal-ok" style="width:auto;flex:1;">OK</button></div>
 </div></div>
 
@@ -240,7 +241,7 @@ const API_URL='https://script.google.com/macros/s/AKfycbyN1fhx2RtW09QAVWeo4naTzU
 const API_TOKEN='wdp-fahrtenbuch-2026-jl';
 const APP_PASSWORD='wdp2026';
 const LE='wdp_fb_e',LK='wdp_fb_k',LS='wdp_fb_session';
-let entries=[],kwDays={},editIdx=-1,tripActive=false;
+let entries=[],kwDays={},editIdx=-1,tripActive=false,gpsLoading={from:false,to:false};
 
 // ===== LOGIN =====
 function checkLogin(){
@@ -282,6 +283,7 @@ function getWeek(ds){const d=new Date(ds),t=new Date(Date.UTC(d.getFullYear(),d.
 function getWR(y,w){const j=new Date(Date.UTC(y,0,4)),dw=j.getUTCDay()||7,m=new Date(j);m.setUTCDate(j.getUTCDate()-dw+1+(w-1)*7);const s=new Date(m);s.setUTCDate(m.getUTCDate()+6);return pad(m.getUTCDate())+'.'+pad(m.getUTCMonth()+1)+'\u2013'+pad(s.getUTCDate())+'.'+pad(s.getUTCMonth()+1)}
 function mL(ym){const[y,m]=ym.split('-');return['J\u00E4n','Feb','M\u00E4r','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'][parseInt(m)-1]+' '+y}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function setS(s,t){document.getElementById('sync-dot').className='sync-dot '+s;document.getElementById('sync-text').textContent=t}
 function sL(v){document.getElementById('loading').classList.toggle('show',v)}
 function svL(){localStorage.setItem(LE,JSON.stringify(entries));localStorage.setItem(LK,JSON.stringify(kwDays))}
@@ -322,6 +324,7 @@ async function syncUp(){
 }
 
 // ===== AUTOCOMPLETE (sorted by frequency) =====
+let _apTimer=null;
 function uqSorted(f){
   const counts={};
   entries.forEach(e=>{const v=e[f];if(v){counts[v]=(counts[v]||0)+1}});
@@ -330,14 +333,14 @@ function uqSorted(f){
 function sAC(i,l,f){
   const el=document.getElementById(i),li=document.getElementById(l);
   el.addEventListener('focus',()=>shAC(el,li,f));
-  el.addEventListener('input',()=>{shAC(el,li,f);if(f==='from'||f==='to')autoPurpose()});
+  el.addEventListener('input',()=>{shAC(el,li,f);if(f==='from'||f==='to'){clearTimeout(_apTimer);_apTimer=setTimeout(autoPurpose,200)}});
   document.addEventListener('click',e=>{if(!el.contains(e.target)&&!li.contains(e.target))li.classList.remove('show')});
 }
 function shAC(el,li,f){
   const v=el.value.toLowerCase();
   const items=uqSorted(f).filter(x=>x.toLowerCase().includes(v));
   if(!items.length){li.classList.remove('show');return}
-  li.innerHTML=items.map(x=>'<div class="autocomplete-item">'+x+'</div>').join('');
+  li.innerHTML=items.map(x=>'<div class="autocomplete-item">'+esc(x)+'</div>').join('');
   li.classList.add('show');
   li.querySelectorAll('.autocomplete-item').forEach(a=>{
     a.addEventListener('click',()=>{
@@ -386,7 +389,12 @@ document.getElementById('f-km-end').addEventListener('input',calcKm);
 function getAddress(field){
   if(!navigator.geolocation){return}
   const el=document.getElementById(field);
+  const key=field==='f-from'?'from':'to';
+  gpsLoading[key]=true;
   el.value='Standort wird ermittelt...';
+  el.style.borderColor='var(--og)';
+  el.style.fontStyle='italic';
+  function clearGps(){gpsLoading[key]=false;el.style.borderColor='';el.style.fontStyle=''}
   navigator.geolocation.getCurrentPosition(
     function(pos){
       const lat=pos.coords.latitude,lon=pos.coords.longitude;
@@ -404,16 +412,16 @@ function getAddress(field){
           }else{
             addr=lat.toFixed(5)+', '+lon.toFixed(5);
           }
-          el.value=addr;
+          el.value=addr;clearGps();
           // Save address to trip state if trip is active
           if(field==='f-from'){
             const s=localStorage.getItem('wdp_trip');
             if(s){try{const d=JSON.parse(s);d.fromAddr=addr;localStorage.setItem('wdp_trip',JSON.stringify(d))}catch{}}
           }
         })
-        .catch(()=>{el.value=lat.toFixed(5)+', '+lon.toFixed(5)});
+        .catch(()=>{el.value=lat.toFixed(5)+', '+lon.toFixed(5);clearGps()});
     },
-    function(){el.value='';toast('Standort nicht verf\u00FCgbar')},
+    function(){el.value='';clearGps();toast('Standort nicht verf\u00FCgbar')},
     {enableHighAccuracy:true,timeout:10000}
   );
 }
@@ -439,13 +447,13 @@ function stampStop(){
 }
 let _kc=null;
 function openKm(t,l,p,cb){_kc=cb;document.getElementById('km-modal-title').textContent=t;document.getElementById('km-modal-label').textContent=l;const i=document.getElementById('km-modal-input');i.value=p||'';document.getElementById('km-modal').classList.add('show');setTimeout(()=>i.focus(),100)}
-document.getElementById('km-modal-ok').addEventListener('click',function(){const v=parseFloat(document.getElementById('km-modal-input').value);if(!v&&v!==0){toast('\u26A0 KM eingeben');return}document.getElementById('km-modal').classList.remove('show');if(_kc)_kc(v);_kc=null});
+document.getElementById('km-modal-ok').addEventListener('click',function(){const v=parseFloat(document.getElementById('km-modal-input').value);if(!v&&v!==0){toast('\u26A0 KM eingeben');return}if(v<0){toast('\u26A0 KM-Stand kann nicht negativ sein');return}document.getElementById('km-modal').classList.remove('show');if(_kc)_kc(v);_kc=null});
 document.getElementById('km-modal-cancel').addEventListener('click',function(){document.getElementById('km-modal').classList.remove('show');_kc=null});
 document.getElementById('km-modal-input').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('km-modal-ok').click()});
 
 function updateTrip(){
   const bs=document.getElementById('btn-start'),be=document.getElementById('btn-stop'),st=document.getElementById('trip-status'),tx=document.getElementById('trip-status-text');
-  if(tripActive){bs.disabled=true;bs.classList.add('active');be.disabled=false;st.style.display='block';tx.innerHTML='\u{1F7E2} Seit <b>'+document.getElementById('f-time').value+'</b> ('+document.getElementById('f-km-start').value+' km)'}
+  if(tripActive){bs.disabled=true;bs.classList.add('active');be.disabled=false;st.style.display='block';tx.innerHTML='\u{1F7E2} Seit <b>'+esc(document.getElementById('f-time').value)+'</b> ('+esc(document.getElementById('f-km-start').value)+' km)'}
   else{bs.disabled=false;bs.classList.remove('active');be.disabled=true;st.style.display='none'}
 }
 function restoreTrip(){const s=localStorage.getItem('wdp_trip');if(s){try{const d=JSON.parse(s);document.getElementById('f-date').value=d.date;document.getElementById('f-time').value=d.time;if(d.kmStart)document.getElementById('f-km-start').value=d.kmStart;if(d.fromAddr)document.getElementById('f-from').value=d.fromAddr;tripActive=true}catch{tripActive=false}}else{tripActive=false}updateTrip()}
@@ -463,6 +471,9 @@ document.getElementById('btn-clear-form').addEventListener('click',()=>{
 document.getElementById('btn-save').addEventListener('click',async()=>{
   const e={date:document.getElementById('f-date').value,time:document.getElementById('f-time').value,timeArrival:document.getElementById('f-time-arrival').value,from:document.getElementById('f-from').value.trim(),to:document.getElementById('f-to').value.trim(),vehicle:document.getElementById('f-vehicle').value.trim(),purpose:document.getElementById('f-purpose').value.trim(),kmStart:parseFloat(document.getElementById('f-km-start').value)||0,kmEnd:parseFloat(document.getElementById('f-km-end').value)||0};
   if(!e.date||!e.from||!e.to){toast('\u26A0 Datum + Orte nötig');return}
+  if(gpsLoading.from||gpsLoading.to){toast('\u23F3 GPS noch aktiv \u2013 kurz warten');return}
+  if(e.from==='Standort wird ermittelt...'||e.to==='Standort wird ermittelt...'){toast('\u26A0 Adresse noch nicht geladen');return}
+  if(e.kmEnd>0&&e.kmStart>0&&e.kmEnd<e.kmStart){toast('\u26A0 KM-Ende ist kleiner als KM-Start');return}
   e.km=Math.max(0,e.kmEnd-e.kmStart);const btn=document.getElementById('btn-save');btn.disabled=true;btn.textContent='...';
   entries.push(e);entries.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
   await syncUp();rE();toast('\u2713 Gespeichert');
@@ -483,7 +494,7 @@ function rE(){
   const sorted=entries.map((e,i)=>({e,i})).sort((a,b)=>(b.e.date+b.e.time).localeCompare(a.e.date+a.e.time));
   const visible=showAllEntries?sorted:sorted.slice(0,10);
   const hidden=entries.length-visible.length;
-  body.innerHTML=visible.map(({e,i})=>'<tr style="cursor:pointer" onclick="openEdit('+i+')"><td><b>'+fmtD(e.date)+'</b><br><span style="font-size:11px;color:var(--gy)">'+(e.time||'')+'\u2192'+(e.timeArrival||'')+'</span></td><td style="font-size:12px">'+e.from+' \u2192 '+e.to+'</td><td style="font-size:12px">'+e.purpose+'</td><td><span class="badge">'+e.km+'</span></td><td><button class="delete-btn" onclick="event.stopPropagation();delE('+i+')">\u2715</button></td></tr>').join('')
+  body.innerHTML=visible.map(({e,i})=>'<tr style="cursor:pointer" onclick="openEdit('+i+')"><td><b>'+fmtD(e.date)+'</b><br><span style="font-size:11px;color:var(--gy)">'+esc(e.time||'')+'\u2192'+esc(e.timeArrival||'')+'</span></td><td style="font-size:12px">'+esc(e.from)+' \u2192 '+esc(e.to)+'</td><td style="font-size:12px">'+esc(e.purpose)+'</td><td><span class="badge">'+e.km+'</span></td><td><button class="delete-btn" onclick="event.stopPropagation();delE('+i+')">\u2715</button></td></tr>').join('')
   +(hidden>0?'<tr><td colspan="5" style="text-align:center;padding:12px;"><button onclick="showAllEntries=true;rE();" style="background:none;border:1.5px solid var(--bd);border-radius:50px;padding:8px 20px;font-family:var(--fd);font-size:12px;font-weight:600;color:var(--gy);cursor:pointer;">'+hidden+' weitere anzeigen</button></td></tr>':'')
   +(showAllEntries&&entries.length>10?'<tr><td colspan="5" style="text-align:center;padding:12px;"><button onclick="showAllEntries=false;rE();" style="background:none;border:1.5px solid var(--bd);border-radius:50px;padding:8px 20px;font-family:var(--fd);font-size:12px;font-weight:600;color:var(--gy);cursor:pointer;">Weniger anzeigen</button></td></tr>':'');
 }
@@ -492,7 +503,10 @@ document.getElementById('btn-clear-all').addEventListener('click',async()=>{if(!
 document.getElementById('btn-refresh').addEventListener('click',async()=>{sL(true);const ok=await syncDown();sL(false);rE();initForm();toast(ok?'\u2713 Sync':'Fehler')});
 
 // EDIT
-function openEdit(i){editIdx=i;const e=entries[i];document.getElementById('e-date').value=e.date;document.getElementById('e-time').value=e.time;document.getElementById('e-time-arrival').value=e.timeArrival||'';document.getElementById('e-from').value=e.from;document.getElementById('e-to').value=e.to;document.getElementById('e-vehicle').value=e.vehicle;document.getElementById('e-purpose').value=e.purpose;document.getElementById('e-km-start').value=e.kmStart;document.getElementById('e-km-end').value=e.kmEnd;document.getElementById('edit-modal').classList.add('show')}
+function calcEditKm(){const s=parseFloat(document.getElementById('e-km-start').value)||0,e=parseFloat(document.getElementById('e-km-end').value)||0;document.getElementById('e-km-diff').innerHTML='<small>Gefahrene Kilometer</small>'+Math.max(0,e-s)+' km'}
+document.getElementById('e-km-start').addEventListener('input',calcEditKm);
+document.getElementById('e-km-end').addEventListener('input',calcEditKm);
+function openEdit(i){editIdx=i;const e=entries[i];document.getElementById('e-date').value=e.date;document.getElementById('e-time').value=e.time;document.getElementById('e-time-arrival').value=e.timeArrival||'';document.getElementById('e-from').value=e.from;document.getElementById('e-to').value=e.to;document.getElementById('e-vehicle').value=e.vehicle;document.getElementById('e-purpose').value=e.purpose;document.getElementById('e-km-start').value=e.kmStart;document.getElementById('e-km-end').value=e.kmEnd;calcEditKm();document.getElementById('edit-modal').classList.add('show')}
 document.getElementById('btn-edit-cancel').addEventListener('click',()=>{document.getElementById('edit-modal').classList.remove('show')});
 document.getElementById('btn-edit-save').addEventListener('click',async()=>{const e=entries[editIdx];e.date=document.getElementById('e-date').value;e.time=document.getElementById('e-time').value;e.timeArrival=document.getElementById('e-time-arrival').value;e.from=document.getElementById('e-from').value.trim();e.to=document.getElementById('e-to').value.trim();e.vehicle=document.getElementById('e-vehicle').value.trim();e.purpose=document.getElementById('e-purpose').value.trim();e.kmStart=parseFloat(document.getElementById('e-km-start').value)||0;e.kmEnd=parseFloat(document.getElementById('e-km-end').value)||0;e.km=Math.max(0,e.kmEnd-e.kmStart);entries.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));await syncUp();rE();document.getElementById('edit-modal').classList.remove('show');toast('\u2713 OK')});
 
@@ -568,7 +582,7 @@ document.getElementById('btn-export-xlsx').addEventListener('click',()=>{
 // PRINT / PDF EXPORT
 document.getElementById('btn-export-print').addEventListener('click',()=>{
   const d=getExportData();if(!d)return;
-  const rows=d.me.map(e=>'<tr><td>'+fmtD(e.date)+'</td><td>'+(e.time||'')+'</td><td>'+(e.timeArrival||'')+'</td><td>'+e.from+'</td><td>'+e.to+'</td><td>'+e.vehicle+'</td><td>'+e.purpose+'</td><td style="text-align:right">'+e.kmStart+'</td><td style="text-align:right">'+e.kmEnd+'</td><td style="text-align:right">'+e.km+'</td></tr>').join('');
+  const rows=d.me.map(e=>'<tr><td>'+fmtD(e.date)+'</td><td>'+esc(e.time||'')+'</td><td>'+esc(e.timeArrival||'')+'</td><td>'+esc(e.from)+'</td><td>'+esc(e.to)+'</td><td>'+esc(e.vehicle)+'</td><td>'+esc(e.purpose)+'</td><td style="text-align:right">'+e.kmStart+'</td><td style="text-align:right">'+e.kmEnd+'</td><td style="text-align:right">'+e.km+'</td></tr>').join('');
 
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Fahrtenbuch ${d.label}</title>
 <style>

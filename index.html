@@ -24,11 +24,13 @@
   .login-box{background:var(--wh);border-radius:var(--r);padding:32px;width:100%;max-width:340px;text-align:center;box-shadow:var(--sl)}
   .login-logo{font-family:var(--fd);font-weight:700;font-size:22px;margin-bottom:4px}.login-logo span{color:var(--ac)}
   .login-sub{font-size:12px;color:var(--gy);margin-bottom:24px}
-  .login-input{width:100%;padding:14px;border:1.5px solid var(--bd);border-radius:var(--rs);font-family:var(--fb);font-size:16px;text-align:center;outline:none;-webkit-appearance:none;margin-bottom:12px}
+  .login-input{width:100%;padding:14px;border:1.5px solid var(--bd);border-radius:var(--rs);font-family:var(--fb);font-size:16px;text-align:center;outline:none;-webkit-appearance:none;margin-bottom:10px}
   .login-input:focus{border-color:var(--ac)}
-  .login-btn{width:100%;padding:14px;background:var(--bk);color:var(--wh);border:none;border-radius:50px;font-family:var(--fd);font-weight:600;font-size:15px;cursor:pointer;transition:background .2s}
-  .login-btn:hover{background:var(--ad)}
+  .login-btn{width:100%;padding:14px;background:var(--bk);color:var(--wh);border:none;border-radius:50px;font-family:var(--fd);font-weight:600;font-size:15px;cursor:pointer;transition:background .2s;margin-top:4px}
+  .login-btn:hover{background:var(--ad)}.login-btn:disabled{opacity:.5;cursor:not-allowed}
   .login-error{color:var(--rd);font-size:13px;margin-top:10px;display:none}
+  .login-toggle{margin-top:14px;font-size:12px;color:var(--gy)}
+  .login-toggle a{color:var(--ac);text-decoration:none;font-weight:600;cursor:pointer}
 
   /* APP */
   .app{display:none}
@@ -40,6 +42,8 @@
   .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--gy);transition:background .3s}
   .sync-dot.ok{background:var(--gn)}.sync-dot.loading{background:var(--og);animation:pulse 1s infinite}.sync-dot.error{background:var(--rd)}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .logout-btn{background:none;border:1.5px solid var(--bd);border-radius:50px;font-family:var(--fd);font-size:11px;font-weight:600;color:var(--gy);padding:5px 12px;cursor:pointer;margin-left:6px;white-space:nowrap}
+  .logout-btn:hover{border-color:var(--rd);color:var(--rd)}
   .tabs{display:flex;gap:4px;padding:10px 12px;max-width:700px;margin:0 auto;overflow-x:auto;-webkit-overflow-scrolling:touch}
   .tab{font-family:var(--fd);font-size:13px;font-weight:500;padding:9px 16px;border-radius:50px;border:1.5px solid var(--bd);background:var(--wh);color:var(--gy);cursor:pointer;white-space:nowrap;transition:all .2s;-webkit-tap-highlight-color:transparent}
   .tab:hover{border-color:var(--ac);color:var(--ac)}.tab.active{background:var(--bk);color:var(--wh);border-color:var(--bk)}
@@ -99,18 +103,21 @@
   @keyframes spin{to{transform:rotate(360deg)}}
   .loading-text{font-family:var(--fd);font-size:13px;color:var(--gy)}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
 <!-- LOGIN SCREEN -->
-<div class="login-screen hidden" id="login-screen">
+<div class="login-screen hidden" id="login-screen" data-mode="login">
   <div class="login-box">
     <div class="login-logo">waterdrop<span>&middot;</span>drive</div>
-    <div class="login-sub">Fahrtenbuch &amp; Reisekosten</div>
+    <div class="login-sub" id="login-sub">Fahrtenbuch &amp; Reisekosten</div>
+    <input type="email" class="login-input" id="login-email" placeholder="E-Mail" autocomplete="email">
     <input type="password" class="login-input" id="login-pw" placeholder="Passwort" autocomplete="current-password">
     <button class="login-btn" id="login-btn">Anmelden</button>
-    <div class="login-error" id="login-error">Falsches Passwort</div>
+    <div class="login-error" id="login-error"></div>
+    <div class="login-toggle"><span id="login-toggle-text">Noch kein Account?</span> <a id="login-toggle">Registrieren</a></div>
   </div>
 </div>
 
@@ -119,6 +126,7 @@
 <div class="header"><div class="header-inner">
   <div class="logo">waterdrop<span>&middot;</span>drive</div>
   <div class="sync-status"><div class="sync-dot" id="sync-dot"></div><span id="sync-text">...</span></div>
+  <button class="logout-btn" id="logout-btn">Abmelden</button>
 </div></div>
 
 <div class="tabs">
@@ -232,104 +240,155 @@
   <div class="modal-actions" style="margin-top:14px;"><button class="btn btn-secondary" id="km-modal-cancel">Abbrechen</button><button class="btn btn-primary" id="km-modal-ok" style="width:auto;flex:1;">OK</button></div>
 </div></div>
 
-<div class="loading-overlay" id="loading"><div class="spinner"></div><div class="loading-text">Laden...</div></div>
+<div class="loading-overlay" id="loading"><div class="spinner"></div><div class="loading-text" id="loading-text">Laden...</div></div>
 <div class="toast" id="toast"></div>
 
 <script>
-// ===== CONFIG =====
-const API_URL='https://script.google.com/macros/s/AKfycbyN1fhx2RtW09QAVWeo4naTzUV0tsndSFxKyZGIg2_K3nXGVLHb70p6CFPd2QYDADs5/exec';
-const API_TOKEN='wdp-fahrtenbuch-2026-jl';
-const APP_PASSWORD='wdp2026';
-const LE='wdp_fb_e',LK='wdp_fb_k',LS='wdp_fb_session';
+// ===== SUPABASE =====
+const SUPABASE_URL='https://bdunrvkypzwadtthrfmi.supabase.co';
+const SUPABASE_KEY='sb_publishable_RBKVQ1RwRHwPTn3oiB6AZQ_Am4EOQwZ';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+const LE='wdp_fb_e',LK='wdp_fb_k';
 let entries=[],kwDays={},editIdx=-1,tripActive=false,gpsLoading={from:false,to:false};
 
-// ===== LOGIN =====
-function checkLogin(){
-  const saved=localStorage.getItem(LS);
-  if(saved){
-    try{
-      const exp=JSON.parse(saved).exp;
-      if(exp&&Date.now()<exp){showApp();return}
-    }catch{}
-  }
-  // Not logged in — show login screen
-  document.getElementById('login-screen').classList.remove('hidden');
+// ===== AUTH =====
+async function checkLogin(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(session){showApp()}
+  else{document.getElementById('login-screen').classList.remove('hidden')}
 }
+
 document.getElementById('login-btn').addEventListener('click',doLogin);
 document.getElementById('login-pw').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
-function doLogin(){
+document.getElementById('login-email').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('login-pw').focus()});
+
+document.getElementById('login-toggle').addEventListener('click',()=>{
+  const scr=document.getElementById('login-screen');
+  const isLogin=scr.dataset.mode==='login';
+  scr.dataset.mode=isLogin?'signup':'login';
+  document.getElementById('login-btn').textContent=isLogin?'Registrieren':'Anmelden';
+  document.getElementById('login-toggle-text').textContent=isLogin?'Bereits registriert?':'Noch kein Account?';
+  document.getElementById('login-toggle').textContent=isLogin?'Anmelden':'Registrieren';
+  document.getElementById('login-sub').textContent=isLogin?'Account erstellen':'Fahrtenbuch & Reisekosten';
+  document.getElementById('login-error').style.display='none';
+});
+
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
   const pw=document.getElementById('login-pw').value;
-  if(pw===APP_PASSWORD){
-    localStorage.setItem(LS,JSON.stringify({exp:Date.now()+30*24*60*60*1000}));
+  const isSignup=document.getElementById('login-screen').dataset.mode==='signup';
+  if(!email||!pw){toast('⚠ E-Mail und Passwort eingeben');return}
+  const btn=document.getElementById('login-btn');
+  btn.disabled=true;btn.textContent='...';
+  document.getElementById('login-error').style.display='none';
+  const{error}=isSignup
+    ?await sb.auth.signUp({email,password:pw})
+    :await sb.auth.signInWithPassword({email,password:pw});
+  btn.disabled=false;
+  btn.textContent=isSignup?'Registrieren':'Anmelden';
+  if(error){
+    const el=document.getElementById('login-error');
+    el.textContent=error.message==='Invalid login credentials'?'Falsche E-Mail oder Passwort':error.message;
+    el.style.display='block';
+  }else{
+    if(isSignup){toast('✓ Account erstellt – bitte E-Mail bestätigen falls nötig')}
     document.getElementById('login-screen').classList.add('hidden');
     showApp();
-  }else{
-    document.getElementById('login-error').style.display='block';
-    document.getElementById('login-pw').value='';
-    document.getElementById('login-pw').focus();
   }
 }
+
+document.getElementById('logout-btn').addEventListener('click',async()=>{
+  if(!confirm('Abmelden?'))return;
+  await sb.auth.signOut();
+  entries=[];kwDays={};
+  localStorage.removeItem(LE);localStorage.removeItem(LK);localStorage.removeItem('wdp_trip');
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('login-email').value='';
+  document.getElementById('login-pw').value='';
+});
+
 function showApp(){
   document.getElementById('app').classList.add('show');
   initData();
 }
 
 // ===== HELPERS =====
+function uuid(){return crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:r&0x3|0x8).toString(16)})}
 function pad(n){return String(n).padStart(2,'0')}
 function now(){const d=new Date();return{date:d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()),time:pad(d.getHours())+':'+pad(d.getMinutes())}}
 function fmtD(s){if(!s)return'';const p=s.split('-');return p[2]+'.'+p[1]+'.'+p[0]}
-function fmtE(n){return'\u20AC '+n.toFixed(2).replace('.',',')}
+function fmtE(n){return'€ '+n.toFixed(2).replace('.',',')}
 function getWeek(ds){const d=new Date(ds),t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));t.setUTCDate(t.getUTCDate()+4-(t.getUTCDay()||7));const ys=new Date(Date.UTC(t.getUTCFullYear(),0,1));return{year:t.getUTCFullYear(),week:Math.ceil((((t-ys)/864e5)+1)/7)}}
-function getWR(y,w){const j=new Date(Date.UTC(y,0,4)),dw=j.getUTCDay()||7,m=new Date(j);m.setUTCDate(j.getUTCDate()-dw+1+(w-1)*7);const s=new Date(m);s.setUTCDate(m.getUTCDate()+6);return pad(m.getUTCDate())+'.'+pad(m.getUTCMonth()+1)+'\u2013'+pad(s.getUTCDate())+'.'+pad(s.getUTCMonth()+1)}
-function mL(ym){const[y,m]=ym.split('-');return['J\u00E4n','Feb','M\u00E4r','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'][parseInt(m)-1]+' '+y}
+function getWR(y,w){const j=new Date(Date.UTC(y,0,4)),dw=j.getUTCDay()||7,m=new Date(j);m.setUTCDate(j.getUTCDate()-dw+1+(w-1)*7);const s=new Date(m);s.setUTCDate(m.getUTCDate()+6);return pad(m.getUTCDate())+'.'+pad(m.getUTCMonth()+1)+'–'+pad(s.getUTCDate())+'.'+pad(s.getUTCMonth()+1)}
+function mL(ym){const[y,m]=ym.split('-');return['Jän','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'][parseInt(m)-1]+' '+y}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function setS(s,t){document.getElementById('sync-dot').className='sync-dot '+s;document.getElementById('sync-text').textContent=t}
-function sL(v){document.getElementById('loading').classList.toggle('show',v)}
+function sL(v,txt){document.getElementById('loading').classList.toggle('show',v);if(txt)document.getElementById('loading-text').textContent=txt}
 function svL(){localStorage.setItem(LE,JSON.stringify(entries));localStorage.setItem(LK,JSON.stringify(kwDays))}
-function ldL(){try{entries=JSON.parse(localStorage.getItem(LE))||[]}catch{entries=[]}try{kwDays=JSON.parse(localStorage.getItem(LK))||{}}catch{kwDays={}}}
-
-// ===== JSONP API =====
-let _j=0;
-function api(action,data){
-  return new Promise(r=>{
-    if(!API_URL){r(null);return}
-    const cb='_c'+(++_j)+'_'+Date.now();
-    const to=setTimeout(()=>{delete window[cb];r(null)},15000);
-    window[cb]=function(res){clearTimeout(to);delete window[cb];const s=document.getElementById('s_'+cb);if(s)s.remove();r(res)};
-    let url=API_URL+'?action='+action+'&token='+API_TOKEN+'&callback='+cb;
-    if(data)url+='&data='+encodeURIComponent(JSON.stringify(data));
-    const s=document.createElement('script');s.id='s_'+cb;s.src=url;
-    s.onerror=function(){clearTimeout(to);delete window[cb];s.remove();r(null)};
-    document.head.appendChild(s);
-  });
+function ldL(){
+  try{entries=JSON.parse(localStorage.getItem(LE))||[]}catch{entries=[]}
+  try{kwDays=JSON.parse(localStorage.getItem(LK))||{}}catch{kwDays={}}
+  // ensure all entries have an id
+  entries.forEach(e=>{if(!e.id)e.id=uuid()});
 }
+
+// ===== DB SYNC =====
+function toRow(e,userId){
+  return{id:e.id,user_id:userId,date:e.date,time:e.time||'',time_arrival:e.timeArrival||'',from_place:e.from||'',to_place:e.to||'',vehicle:e.vehicle||'',purpose:e.purpose||'',km_start:e.kmStart||0,km_end:e.kmEnd||0,km:e.km||0}
+}
+function fromRow(r){
+  return{id:r.id,date:r.date,time:r.time||'',timeArrival:r.time_arrival||'',from:r.from_place||'',to:r.to_place||'',vehicle:r.vehicle||'',purpose:r.purpose||'',kmStart:r.km_start||0,kmEnd:r.km_end||0,km:r.km||0}
+}
+
 async function syncDown(){
   setS('loading','Laden...');
-  const[re,rk]=await Promise.all([api('getEntries'),api('getKwDays')]);
-  if(re&&re.entries){entries=re.entries;if(rk&&rk.kwDays)kwDays=rk.kwDays;svL();setS('ok',entries.length+' Fahrten');return true}
-  if(re&&re.error){setS('error',re.error);return false}
-  setS('error','Fehler');return false;
-}
-async function syncUp(){
-  svL(); // always save locally first
-  setS('loading','Speichern...');
   try{
-    const[re,rk]=await Promise.all([api('saveEntries',entries),api('saveKwDays',kwDays)]);
-    if(re&&re.error){setS('error',re.error);console.error('saveEntries:',re.error);return}
-    if(rk&&rk.error){setS('error',rk.error);console.error('saveKwDays:',rk.error);return}
-    if(re&&re.success){setS('ok',entries.length+' Fahrten')}
-    else{setS('error','Sync-Fehler');console.error('saveEntries result:',re)}
-  }catch(e){setS('error','Fehler');console.error(e)}
+    const{data:{user}}=await sb.auth.getUser();
+    if(!user){setS('error','Nicht angemeldet');return false}
+    const[{data:trips,error:e1},{data:kw,error:e2}]=await Promise.all([
+      sb.from('trips').select('*').eq('user_id',user.id).order('date').order('time'),
+      sb.from('kw_days').select('*').eq('user_id',user.id)
+    ]);
+    if(e1||e2){setS('error',(e1||e2).message);return false}
+    entries=trips.map(fromRow);
+    kwDays={};kw.forEach(r=>{kwDays[r.kw_key]=r.days});
+    svL();setS('ok',entries.length+' Fahrten');return true;
+  }catch(e){setS('error','Offline');return false}
 }
 
-// ===== AUTOCOMPLETE (sorted by frequency) =====
-let _apTimer=null;
-function uqSorted(f){
-  const counts={};
-  entries.forEach(e=>{const v=e[f];if(v){counts[v]=(counts[v]||0)+1}});
-  return Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+async function syncUp(){
+  svL();
+  setS('loading','Speichern...');
+  try{
+    const{data:{user}}=await sb.auth.getUser();
+    if(!user){setS('error','Nicht angemeldet');return}
+
+    // delete all existing, then insert current (simple full-replace)
+    const{error:d1}=await sb.from('trips').delete().eq('user_id',user.id);
+    if(d1){setS('error',d1.message);return}
+    if(entries.length){
+      const{error:i1}=await sb.from('trips').insert(entries.map(e=>toRow(e,user.id)));
+      if(i1){setS('error',i1.message);return}
+    }
+
+    const{error:d2}=await sb.from('kw_days').delete().eq('user_id',user.id);
+    if(d2){setS('error',d2.message);return}
+    const kwRows=Object.entries(kwDays).filter(([,v])=>v>0).map(([kw_key,days])=>({user_id:user.id,kw_key,days}));
+    if(kwRows.length){
+      const{error:i2}=await sb.from('kw_days').insert(kwRows);
+      if(i2){setS('error',i2.message);return}
+    }
+
+    setS('ok',entries.length+' Fahrten');
+  }catch(e){setS('error','Offline – lokal gespeichert');console.error(e)}
 }
+
+// ===== AUTOCOMPLETE =====
+let _apTimer=null;
+function uqSorted(f){const counts={};entries.forEach(e=>{const v=e[f];if(v){counts[v]=(counts[v]||0)+1}});return Object.keys(counts).sort((a,b)=>counts[b]-counts[a])}
 function sAC(i,l,f){
   const el=document.getElementById(i),li=document.getElementById(l);
   el.addEventListener('focus',()=>shAC(el,li,f));
@@ -343,37 +402,14 @@ function shAC(el,li,f){
   li.innerHTML=items.map(x=>'<div class="autocomplete-item">'+esc(x)+'</div>').join('');
   li.classList.add('show');
   li.querySelectorAll('.autocomplete-item').forEach(a=>{
-    a.addEventListener('click',()=>{
-      el.value=a.textContent;
-      li.classList.remove('show');
-      if(f==='from'||f==='to')autoPurpose();
-    });
+    a.addEventListener('click',()=>{el.value=a.textContent;li.classList.remove('show');if(f==='from'||f==='to')autoPurpose()});
   });
 }
-
-// Auto-fill purpose based on Von→Nach combination
 function autoPurpose(){
-  const from=document.getElementById('f-from').value.trim();
-  const to=document.getElementById('f-to').value.trim();
-  const purposeEl=document.getElementById('f-purpose');
-  // Only auto-fill if purpose is empty and we have both from and to
+  const from=document.getElementById('f-from').value.trim(),to=document.getElementById('f-to').value.trim(),purposeEl=document.getElementById('f-purpose');
   if(purposeEl.value.trim()||!from||!to)return;
-  // Find most recent entry with same from→to
-  for(let i=entries.length-1;i>=0;i--){
-    const e=entries[i];
-    if(e.from===from&&e.to===to&&e.purpose){
-      purposeEl.value=e.purpose;
-      return;
-    }
-  }
-  // Also check reverse route
-  for(let i=entries.length-1;i>=0;i--){
-    const e=entries[i];
-    if(e.from===to&&e.to===from&&e.purpose){
-      purposeEl.value=e.purpose;
-      return;
-    }
-  }
+  for(let i=entries.length-1;i>=0;i--){const e=entries[i];if(e.from===from&&e.to===to&&e.purpose){purposeEl.value=e.purpose;return}}
+  for(let i=entries.length-1;i>=0;i--){const e=entries[i];if(e.from===to&&e.to===from&&e.purpose){purposeEl.value=e.purpose;return}}
 }
 
 // ===== TABS =====
@@ -387,69 +423,51 @@ document.getElementById('f-km-end').addEventListener('input',calcKm);
 
 // START/STOP
 function getAddress(field){
-  if(!navigator.geolocation){return}
-  const el=document.getElementById(field);
-  const key=field==='f-from'?'from':'to';
-  gpsLoading[key]=true;
-  el.value='Standort wird ermittelt...';
-  el.style.borderColor='var(--og)';
-  el.style.fontStyle='italic';
+  if(!navigator.geolocation)return;
+  const el=document.getElementById(field),key=field==='f-from'?'from':'to';
+  gpsLoading[key]=true;el.value='Standort wird ermittelt...';el.style.borderColor='var(--og)';el.style.fontStyle='italic';
   function clearGps(){gpsLoading[key]=false;el.style.borderColor='';el.style.fontStyle=''}
   navigator.geolocation.getCurrentPosition(
-    function(pos){
+    pos=>{
       const lat=pos.coords.latitude,lon=pos.coords.longitude;
-      const url='https://nominatim.openstreetmap.org/reverse?format=json&lat='+lat+'&lon='+lon+'&zoom=18&addressdetails=1';
-      fetch(url,{headers:{'Accept-Language':'de'}})
+      fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat='+lat+'&lon='+lon+'&zoom=18&addressdetails=1',{headers:{'Accept-Language':'de'}})
         .then(r=>r.json())
         .then(data=>{
           let addr='';
-          if(data&&data.address){
-            const a=data.address;
-            const parts=[];
-            if(a.road)parts.push(a.road+(a.house_number?' '+a.house_number:''));
-            if(a.postcode||a.city||a.town||a.village)parts.push((a.postcode||'')+' '+(a.city||a.town||a.village||''));
-            addr=parts.join(', ')||data.display_name||'';
-          }else{
-            addr=lat.toFixed(5)+', '+lon.toFixed(5);
-          }
+          if(data&&data.address){const a=data.address,parts=[];if(a.road)parts.push(a.road+(a.house_number?' '+a.house_number:''));if(a.postcode||a.city||a.town||a.village)parts.push((a.postcode||'')+' '+(a.city||a.town||a.village||''));addr=parts.join(', ')||data.display_name||''}
+          else{addr=lat.toFixed(5)+', '+lon.toFixed(5)}
           el.value=addr;clearGps();
-          // Save address to trip state if trip is active
-          if(field==='f-from'){
-            const s=localStorage.getItem('wdp_trip');
-            if(s){try{const d=JSON.parse(s);d.fromAddr=addr;localStorage.setItem('wdp_trip',JSON.stringify(d))}catch{}}
-          }
+          if(field==='f-from'){const s=localStorage.getItem('wdp_trip');if(s){try{const d=JSON.parse(s);d.fromAddr=addr;localStorage.setItem('wdp_trip',JSON.stringify(d))}catch{}}}
         })
         .catch(()=>{el.value=lat.toFixed(5)+', '+lon.toFixed(5);clearGps()});
     },
-    function(){el.value='';clearGps();toast('Standort nicht verf\u00FCgbar')},
+    ()=>{el.value='';clearGps();toast('Standort nicht verfügbar')},
     {enableHighAccuracy:true,timeout:10000}
   );
 }
 
 function stampStart(){
   const lk=entries.length?entries[entries.length-1].kmEnd:0;
-  openKm('Abfahrt','KM bei Abfahrt',lk,function(km){
+  openKm('Abfahrt','KM bei Abfahrt',lk,km=>{
     const n=now();document.getElementById('f-date').value=n.date;document.getElementById('f-time').value=n.time;
     document.getElementById('f-time-arrival').value='';document.getElementById('f-km-start').value=km;document.getElementById('f-km-end').value='';calcKm();
     tripActive=true;localStorage.setItem('wdp_trip',JSON.stringify({date:n.date,time:n.time,kmStart:km}));
-    updateTrip();toast('\u25B6 '+n.time+' \u2013 '+km+' km');
-    // Auto-fill departure address
+    updateTrip();toast('▶ '+n.time+' – '+km+' km');
     getAddress('f-from');
   });
 }
 function stampStop(){
-  openKm('Ankunft','KM bei Ankunft',0,function(km){
+  openKm('Ankunft','KM bei Ankunft',0,km=>{
     const n=now();document.getElementById('f-time-arrival').value=n.time;document.getElementById('f-km-end').value=km;calcKm();
-    tripActive=false;localStorage.removeItem('wdp_trip');updateTrip();toast('\u25A0 '+n.time+' \u2013 '+km+' km');
-    // Auto-fill arrival address
+    tripActive=false;localStorage.removeItem('wdp_trip');updateTrip();toast('■ '+n.time+' – '+km+' km');
     getAddress('f-to');
   });
 }
 let _kc=null;
 function openKm(t,l,p,cb){_kc=cb;document.getElementById('km-modal-title').textContent=t;document.getElementById('km-modal-label').textContent=l;const i=document.getElementById('km-modal-input');i.value=p||'';document.getElementById('km-modal').classList.add('show');setTimeout(()=>i.focus(),100)}
-document.getElementById('km-modal-ok').addEventListener('click',function(){const v=parseFloat(document.getElementById('km-modal-input').value);if(!v&&v!==0){toast('\u26A0 KM eingeben');return}if(v<0){toast('\u26A0 KM-Stand kann nicht negativ sein');return}document.getElementById('km-modal').classList.remove('show');if(_kc)_kc(v);_kc=null});
-document.getElementById('km-modal-cancel').addEventListener('click',function(){document.getElementById('km-modal').classList.remove('show');_kc=null});
-document.getElementById('km-modal-input').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('km-modal-ok').click()});
+document.getElementById('km-modal-ok').addEventListener('click',()=>{const v=parseFloat(document.getElementById('km-modal-input').value);if(!v&&v!==0){toast('⚠ KM eingeben');return}if(v<0){toast('⚠ KM-Stand kann nicht negativ sein');return}document.getElementById('km-modal').classList.remove('show');if(_kc)_kc(v);_kc=null});
+document.getElementById('km-modal-cancel').addEventListener('click',()=>{document.getElementById('km-modal').classList.remove('show');_kc=null});
+document.getElementById('km-modal-input').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('km-modal-ok').click()});
 
 function updateTrip(){
   const bs=document.getElementById('btn-start'),be=document.getElementById('btn-stop'),st=document.getElementById('trip-status'),tx=document.getElementById('trip-status-text');
@@ -458,25 +476,24 @@ function updateTrip(){
 }
 function restoreTrip(){const s=localStorage.getItem('wdp_trip');if(s){try{const d=JSON.parse(s);document.getElementById('f-date').value=d.date;document.getElementById('f-time').value=d.time;if(d.kmStart)document.getElementById('f-km-start').value=d.kmStart;if(d.fromAddr)document.getElementById('f-from').value=d.fromAddr;tripActive=true}catch{tripActive=false}}else{tripActive=false}updateTrip()}
 
-// CLEAR FORM
 document.getElementById('btn-clear-form').addEventListener('click',()=>{
   ['f-date','f-time','f-time-arrival','f-from','f-to','f-purpose','f-km-start','f-km-end'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-vehicle').value='FORD Focus S-147XX';
   document.getElementById('km-diff').innerHTML='<small>Gefahrene Kilometer</small>0 km';
-  tripActive=false;localStorage.removeItem('wdp_trip');updateTrip();
-  toast('Formular geleert');
+  tripActive=false;localStorage.removeItem('wdp_trip');updateTrip();toast('Formular geleert');
 });
 
 // SAVE
 document.getElementById('btn-save').addEventListener('click',async()=>{
-  const e={date:document.getElementById('f-date').value,time:document.getElementById('f-time').value,timeArrival:document.getElementById('f-time-arrival').value,from:document.getElementById('f-from').value.trim(),to:document.getElementById('f-to').value.trim(),vehicle:document.getElementById('f-vehicle').value.trim(),purpose:document.getElementById('f-purpose').value.trim(),kmStart:parseFloat(document.getElementById('f-km-start').value)||0,kmEnd:parseFloat(document.getElementById('f-km-end').value)||0};
-  if(!e.date||!e.from||!e.to){toast('\u26A0 Datum + Orte nötig');return}
-  if(gpsLoading.from||gpsLoading.to){toast('\u23F3 GPS noch aktiv \u2013 kurz warten');return}
-  if(e.from==='Standort wird ermittelt...'||e.to==='Standort wird ermittelt...'){toast('\u26A0 Adresse noch nicht geladen');return}
-  if(e.kmEnd>0&&e.kmStart>0&&e.kmEnd<e.kmStart){toast('\u26A0 KM-Ende ist kleiner als KM-Start');return}
-  e.km=Math.max(0,e.kmEnd-e.kmStart);const btn=document.getElementById('btn-save');btn.disabled=true;btn.textContent='...';
+  const e={id:uuid(),date:document.getElementById('f-date').value,time:document.getElementById('f-time').value,timeArrival:document.getElementById('f-time-arrival').value,from:document.getElementById('f-from').value.trim(),to:document.getElementById('f-to').value.trim(),vehicle:document.getElementById('f-vehicle').value.trim(),purpose:document.getElementById('f-purpose').value.trim(),kmStart:parseFloat(document.getElementById('f-km-start').value)||0,kmEnd:parseFloat(document.getElementById('f-km-end').value)||0};
+  if(!e.date||!e.from||!e.to){toast('⚠ Datum + Orte nötig');return}
+  if(gpsLoading.from||gpsLoading.to){toast('⏳ GPS noch aktiv – kurz warten');return}
+  if(e.from==='Standort wird ermittelt...'||e.to==='Standort wird ermittelt...'){toast('⚠ Adresse noch nicht geladen');return}
+  if(e.kmEnd>0&&e.kmStart>0&&e.kmEnd<e.kmStart){toast('⚠ KM-Ende ist kleiner als KM-Start');return}
+  e.km=Math.max(0,e.kmEnd-e.kmStart);
+  const btn=document.getElementById('btn-save');btn.disabled=true;btn.textContent='...';
   entries.push(e);entries.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
-  await syncUp();rE();toast('\u2713 Gespeichert');
+  await syncUp();rE();toast('✓ Gespeichert');
   btn.disabled=false;btn.innerHTML='&#10003; Fahrt speichern';
   ['f-from','f-to','f-purpose','f-time-arrival','f-km-end'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-km-start').value=e.kmEnd;document.getElementById('f-date').value='';document.getElementById('f-time').value='';
@@ -490,25 +507,24 @@ function rE(){
   const body=document.getElementById('entries-body'),tbl=document.getElementById('entries-table'),emp=document.getElementById('entries-empty'),clr=document.getElementById('btn-clear-all');
   if(!entries.length){tbl.style.display='none';emp.style.display='block';clr.style.display='none';return}
   tbl.style.display='table';emp.style.display='none';clr.style.display='inline-flex';
-  // Show newest first, max 10 unless "show all"
   const sorted=entries.map((e,i)=>({e,i})).sort((a,b)=>(b.e.date+b.e.time).localeCompare(a.e.date+a.e.time));
   const visible=showAllEntries?sorted:sorted.slice(0,10);
   const hidden=entries.length-visible.length;
-  body.innerHTML=visible.map(({e,i})=>'<tr style="cursor:pointer" onclick="openEdit('+i+')"><td><b>'+fmtD(e.date)+'</b><br><span style="font-size:11px;color:var(--gy)">'+esc(e.time||'')+'\u2192'+esc(e.timeArrival||'')+'</span></td><td style="font-size:12px">'+esc(e.from)+' \u2192 '+esc(e.to)+'</td><td style="font-size:12px">'+esc(e.purpose)+'</td><td><span class="badge">'+e.km+'</span></td><td><button class="delete-btn" onclick="event.stopPropagation();delE('+i+')">\u2715</button></td></tr>').join('')
+  body.innerHTML=visible.map(({e,i})=>'<tr style="cursor:pointer" onclick="openEdit('+i+')"><td><b>'+fmtD(e.date)+'</b><br><span style="font-size:11px;color:var(--gy)">'+esc(e.time||'')+'→'+esc(e.timeArrival||'')+'</span></td><td style="font-size:12px">'+esc(e.from)+' → '+esc(e.to)+'</td><td style="font-size:12px">'+esc(e.purpose)+'</td><td><span class="badge">'+e.km+'</span></td><td><button class="delete-btn" onclick="event.stopPropagation();delE('+i+')">✕</button></td></tr>').join('')
   +(hidden>0?'<tr><td colspan="5" style="text-align:center;padding:12px;"><button onclick="showAllEntries=true;rE();" style="background:none;border:1.5px solid var(--bd);border-radius:50px;padding:8px 20px;font-family:var(--fd);font-size:12px;font-weight:600;color:var(--gy);cursor:pointer;">'+hidden+' weitere anzeigen</button></td></tr>':'')
   +(showAllEntries&&entries.length>10?'<tr><td colspan="5" style="text-align:center;padding:12px;"><button onclick="showAllEntries=false;rE();" style="background:none;border:1.5px solid var(--bd);border-radius:50px;padding:8px 20px;font-family:var(--fd);font-size:12px;font-weight:600;color:var(--gy);cursor:pointer;">Weniger anzeigen</button></td></tr>':'');
 }
 async function delE(i){if(!confirm('Löschen?'))return;entries.splice(i,1);await syncUp();rE();toast('Gelöscht')}
 document.getElementById('btn-clear-all').addEventListener('click',async()=>{if(!confirm('ALLE löschen?'))return;entries=[];kwDays={};await syncUp();rE();toast('Gelöscht')});
-document.getElementById('btn-refresh').addEventListener('click',async()=>{sL(true);const ok=await syncDown();sL(false);rE();initForm();toast(ok?'\u2713 Sync':'Fehler')});
+document.getElementById('btn-refresh').addEventListener('click',async()=>{sL(true,'Sync...');const ok=await syncDown();sL(false);rE();initForm();toast(ok?'✓ Sync':'Offline – lokale Daten')});
 
 // EDIT
 function calcEditKm(){const s=parseFloat(document.getElementById('e-km-start').value)||0,e=parseFloat(document.getElementById('e-km-end').value)||0;document.getElementById('e-km-diff').innerHTML='<small>Gefahrene Kilometer</small>'+Math.max(0,e-s)+' km'}
 document.getElementById('e-km-start').addEventListener('input',calcEditKm);
 document.getElementById('e-km-end').addEventListener('input',calcEditKm);
 function openEdit(i){editIdx=i;const e=entries[i];document.getElementById('e-date').value=e.date;document.getElementById('e-time').value=e.time;document.getElementById('e-time-arrival').value=e.timeArrival||'';document.getElementById('e-from').value=e.from;document.getElementById('e-to').value=e.to;document.getElementById('e-vehicle').value=e.vehicle;document.getElementById('e-purpose').value=e.purpose;document.getElementById('e-km-start').value=e.kmStart;document.getElementById('e-km-end').value=e.kmEnd;calcEditKm();document.getElementById('edit-modal').classList.add('show')}
-document.getElementById('btn-edit-cancel').addEventListener('click',()=>{document.getElementById('edit-modal').classList.remove('show')});
-document.getElementById('btn-edit-save').addEventListener('click',async()=>{const e=entries[editIdx];e.date=document.getElementById('e-date').value;e.time=document.getElementById('e-time').value;e.timeArrival=document.getElementById('e-time-arrival').value;e.from=document.getElementById('e-from').value.trim();e.to=document.getElementById('e-to').value.trim();e.vehicle=document.getElementById('e-vehicle').value.trim();e.purpose=document.getElementById('e-purpose').value.trim();e.kmStart=parseFloat(document.getElementById('e-km-start').value)||0;e.kmEnd=parseFloat(document.getElementById('e-km-end').value)||0;e.km=Math.max(0,e.kmEnd-e.kmStart);entries.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));await syncUp();rE();document.getElementById('edit-modal').classList.remove('show');toast('\u2713 OK')});
+document.getElementById('btn-edit-cancel').addEventListener('click',()=>document.getElementById('edit-modal').classList.remove('show'));
+document.getElementById('btn-edit-save').addEventListener('click',async()=>{const e=entries[editIdx];e.date=document.getElementById('e-date').value;e.time=document.getElementById('e-time').value;e.timeArrival=document.getElementById('e-time-arrival').value;e.from=document.getElementById('e-from').value.trim();e.to=document.getElementById('e-to').value.trim();e.vehicle=document.getElementById('e-vehicle').value.trim();e.purpose=document.getElementById('e-purpose').value.trim();e.kmStart=parseFloat(document.getElementById('e-km-start').value)||0;e.kmEnd=parseFloat(document.getElementById('e-km-end').value)||0;e.km=Math.max(0,e.kmEnd-e.kmStart);entries.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));await syncUp();rE();document.getElementById('edit-modal').classList.remove('show');toast('✓ OK')});
 
 // KW
 let showAllKW=false;
@@ -517,8 +533,7 @@ function rKW(){
   const keys=Object.keys(km).sort().reverse(),tbl=document.getElementById('kw-table'),emp=document.getElementById('kw-empty'),body=document.getElementById('kw-body');
   if(!keys.length){tbl.style.display='none';emp.style.display='block';return}
   tbl.style.display='table';emp.style.display='none';
-  const visible=showAllKW?keys:keys.slice(0,10);
-  const hidden=keys.length-visible.length;
+  const visible=showAllKW?keys:keys.slice(0,10),hidden=keys.length-visible.length;
   body.innerHTML=visible.map(k=>{const d=km[k];return'<tr><td><b>KW '+d.week+'</b></td><td style="font-size:11px;color:var(--gy)">'+getWR(d.year,d.week)+'</td><td>'+d.c+'</td><td><span class="badge">'+d.km+'</span></td><td><input type="number" class="kw-input" min="0" max="7" value="'+(kwDays[k]||0)+'" data-kw="'+k+'" onchange="updKW(this)" inputmode="numeric"></td></tr>'}).join('')
   +(hidden>0?'<tr><td colspan="5" style="text-align:center;padding:12px;"><button onclick="showAllKW=true;rKW();" style="background:none;border:1.5px solid var(--bd);border-radius:50px;padding:8px 20px;font-family:var(--fd);font-size:12px;font-weight:600;color:var(--gy);cursor:pointer;">'+hidden+' weitere anzeigen</button></td></tr>':'')
   +(showAllKW&&keys.length>10?'<tr><td colspan="5" style="text-align:center;padding:12px;"><button onclick="showAllKW=false;rKW();" style="background:none;border:1.5px solid var(--bd);border-radius:50px;padding:8px 20px;font-family:var(--fd);font-size:12px;font-weight:600;color:var(--gy);cursor:pointer;">Weniger anzeigen</button></td></tr>':'');
@@ -537,14 +552,12 @@ function cMo(){
   document.getElementById('sum-days').textContent=td;document.getElementById('sum-days-euro').textContent=fmtE(de);
   document.getElementById('sum-total').textContent=fmtE(ke+de);
   const db=document.getElementById('month-detail-body'),dt=document.getElementById('month-detail-table'),dm=document.getElementById('month-detail-empty');
-  if(!keys.length){dt.style.display='none';dm.style.display='block'}else{
-    dt.style.display='table';dm.style.display='none';
-    db.innerHTML=keys.map(k=>'<tr><td><b>KW '+kw[k].week+'</b></td><td>'+kw[k].km+'</td><td>'+kw[k].days+'</td><td>'+fmtE(kw[k].km*.5)+'</td><td>'+fmtE(kw[k].days*45)+'</td></tr>').join('')+'<tr style="font-weight:700;border-top:2px solid var(--bk)"><td>Gesamt</td><td>'+tk+'</td><td>'+td+'</td><td>'+fmtE(ke)+'</td><td>'+fmtE(de)+'</td></tr>';
-  }
+  if(!keys.length){dt.style.display='none';dm.style.display='block'}
+  else{dt.style.display='table';dm.style.display='none';db.innerHTML=keys.map(k=>'<tr><td><b>KW '+kw[k].week+'</b></td><td>'+kw[k].km+'</td><td>'+kw[k].days+'</td><td>'+fmtE(kw[k].km*.5)+'</td><td>'+fmtE(kw[k].days*45)+'</td></tr>').join('')+'<tr style="font-weight:700;border-top:2px solid var(--bk)"><td>Gesamt</td><td>'+tk+'</td><td>'+td+'</td><td>'+fmtE(ke)+'</td><td>'+fmtE(de)+'</td></tr>'}
 }
 document.getElementById('month-select').addEventListener('change',cMo);
 
-// EXPORT HELPERS
+// EXPORT
 function getExportData(){
   const sel=document.getElementById('month-select').value;if(!sel)return null;
   const[sy,sm]=sel.split('-').map(Number);
@@ -555,81 +568,40 @@ function getExportData(){
   return{sel,me,tk,td,ke:tk*.5,de:td*45,label:mL(sel)};
 }
 
-// XLSX EXPORT
 document.getElementById('btn-export-xlsx').addEventListener('click',()=>{
   const d=getExportData();if(!d)return;
   const header=['Datum','Abfahrt','Ankunft','Von','Nach','Fahrzeug','Zweck','KM Start','KM Ende','Kilometer'];
   const rows=d.me.map(e=>[fmtD(e.date),e.time,e.timeArrival||'',e.from,e.to,e.vehicle,e.purpose,e.kmStart,e.kmEnd,e.km]);
-  // Add empty row + summary
-  rows.push([]);
-  rows.push(['Zusammenfassung '+d.label]);
+  rows.push([]);rows.push(['Zusammenfassung '+d.label]);
   rows.push(['Kilometer gesamt','','','','','','','','',d.tk]);
   rows.push(['Kilometergeld netto ('+d.tk+' x 0,50)','','','','','','','','',d.ke.toFixed(2)]);
   rows.push(['Verpflegungstage','','','','','','','','',d.td]);
   rows.push(['Verpflegungspauschale ('+d.td+' x 45,00)','','','','','','','','',d.de.toFixed(2)]);
-  rows.push([]);
-  rows.push(['GESAMTERSTATTUNG','','','','','','','','',(d.ke+d.de).toFixed(2)]);
-
+  rows.push([]);rows.push(['GESAMTERSTATTUNG','','','','','','','','',(d.ke+d.de).toFixed(2)]);
   const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
-  // Column widths
   ws['!cols']=[{wch:12},{wch:8},{wch:8},{wch:30},{wch:30},{wch:22},{wch:25},{wch:10},{wch:10},{wch:12}];
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Fahrtenbuch');
-  XLSX.writeFile(wb,'Fahrtenbuch_'+d.sel+'.xlsx');
-  toast('Excel exportiert');
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Fahrtenbuch');
+  XLSX.writeFile(wb,'Fahrtenbuch_'+d.sel+'.xlsx');toast('Excel exportiert');
 });
 
-// PRINT / PDF EXPORT
 document.getElementById('btn-export-print').addEventListener('click',()=>{
   const d=getExportData();if(!d)return;
   const rows=d.me.map(e=>'<tr><td>'+fmtD(e.date)+'</td><td>'+esc(e.time||'')+'</td><td>'+esc(e.timeArrival||'')+'</td><td>'+esc(e.from)+'</td><td>'+esc(e.to)+'</td><td>'+esc(e.vehicle)+'</td><td>'+esc(e.purpose)+'</td><td style="text-align:right">'+e.kmStart+'</td><td style="text-align:right">'+e.kmEnd+'</td><td style="text-align:right">'+e.km+'</td></tr>').join('');
-
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Fahrtenbuch ${d.label}</title>
-<style>
-  @page{size:landscape;margin:12mm}
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:Arial,sans-serif;color:#1a1a1a;font-size:9pt;padding:10mm}
-  h1{font-size:16pt;margin-bottom:2mm}
-  .sub{font-size:9pt;color:#666;margin-bottom:6mm}
-  table{width:100%;border-collapse:collapse;margin-bottom:8mm}
-  th{background:#1a1a1a;color:#fff;font-size:8pt;text-align:left;padding:4px 6px;font-weight:600}
-  td{padding:4px 6px;border-bottom:1px solid #ddd;font-size:8pt}
-  tr:nth-child(even) td{background:#f5f5f5}
-  .summary{background:#f5f5f5;border-radius:6px;padding:12px 16px;max-width:400px;margin-top:4mm}
-  .summary h2{font-size:11pt;margin-bottom:6px}
-  .row{display:flex;justify-content:space-between;padding:3px 0;font-size:9pt}
-  .row.total{border-top:2px solid #1a1a1a;margin-top:6px;padding-top:6px;font-weight:700;font-size:11pt}
-  .footer{margin-top:15mm;font-size:8pt;color:#999;border-top:1px solid #ddd;padding-top:4mm}
-  .sig{display:flex;gap:60px;margin-top:12mm}
-  .sig-line{border-top:1px solid #1a1a1a;width:180px;padding-top:3px;font-size:8pt;color:#666}
-  @media print{body{padding:0}.no-print{display:none}}
-</style></head><body>
-<h1>Fahrtenbuch \u2013 ${d.label}</h1>
+<style>@page{size:landscape;margin:12mm}*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#1a1a1a;font-size:9pt;padding:10mm}h1{font-size:16pt;margin-bottom:2mm}.sub{font-size:9pt;color:#666;margin-bottom:6mm}table{width:100%;border-collapse:collapse;margin-bottom:8mm}th{background:#1a1a1a;color:#fff;font-size:8pt;text-align:left;padding:4px 6px;font-weight:600}td{padding:4px 6px;border-bottom:1px solid #ddd;font-size:8pt}tr:nth-child(even) td{background:#f5f5f5}.summary{background:#f5f5f5;border-radius:6px;padding:12px 16px;max-width:400px;margin-top:4mm}.summary h2{font-size:11pt;margin-bottom:6px}.row{display:flex;justify-content:space-between;padding:3px 0;font-size:9pt}.row.total{border-top:2px solid #1a1a1a;margin-top:6px;padding-top:6px;font-weight:700;font-size:11pt}.footer{margin-top:15mm;font-size:8pt;color:#999;border-top:1px solid #ddd;padding-top:4mm}.sig{display:flex;gap:60px;margin-top:12mm}.sig-line{border-top:1px solid #1a1a1a;width:180px;padding-top:3px;font-size:8pt;color:#666}@media print{body{padding:0}}</style></head><body>
+<h1>Fahrtenbuch – ${d.label}</h1>
 <div class="sub">Waterdrop Production GmbH &middot; Erstellt am ${fmtD(new Date().toISOString().slice(0,10))}</div>
-<table>
-<thead><tr><th>Datum</th><th>Abfahrt</th><th>Ankunft</th><th>Von</th><th>Nach</th><th>Fahrzeug</th><th>Zweck</th><th style="text-align:right">KM Start</th><th style="text-align:right">KM Ende</th><th style="text-align:right">km</th></tr></thead>
-<tbody>${rows}</tbody>
-</table>
-<div class="summary">
-  <h2>Zusammenfassung</h2>
-  <div class="row"><span>Kilometer gesamt:</span><span>${d.tk} km</span></div>
-  <div class="row"><span>Kilometergeld netto (${d.tk} &times; 0,50 &euro;):</span><span>${fmtE(d.ke)}</span></div>
-  <div class="row"><span>Verpflegungstage:</span><span>${d.td} Tage</span></div>
-  <div class="row"><span>Verpflegungspauschale (${d.td} &times; 45 &euro;):</span><span>${fmtE(d.de)}</span></div>
-  <div class="row total"><span>GESAMTERSTATTUNG:</span><span>${fmtE(d.ke+d.de)}</span></div>
-</div>
+<table><thead><tr><th>Datum</th><th>Abfahrt</th><th>Ankunft</th><th>Von</th><th>Nach</th><th>Fahrzeug</th><th>Zweck</th><th style="text-align:right">KM Start</th><th style="text-align:right">KM Ende</th><th style="text-align:right">km</th></tr></thead><tbody>${rows}</tbody></table>
+<div class="summary"><h2>Zusammenfassung</h2><div class="row"><span>Kilometer gesamt:</span><span>${d.tk} km</span></div><div class="row"><span>Kilometergeld netto (${d.tk} &times; 0,50 &euro;):</span><span>${fmtE(d.ke)}</span></div><div class="row"><span>Verpflegungstage:</span><span>${d.td} Tage</span></div><div class="row"><span>Verpflegungspauschale (${d.td} &times; 45 &euro;):</span><span>${fmtE(d.de)}</span></div><div class="row total"><span>GESAMTERSTATTUNG:</span><span>${fmtE(d.ke+d.de)}</span></div></div>
 <div class="footer">Fahrtenbuch generiert aus waterdrop&middot;drive</div>
-<script>window.onload=function(){window.print()}<\/script>
-</body></html>`;
-
+<script>window.onload=function(){window.print()}<\/script></body></html>`;
   const w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close()}
-  else{toast('Popup blockiert \u2013 bitte Popup-Blocker deaktivieren')}
+  if(w){w.document.write(html);w.document.close()}else{toast('Popup blockiert – bitte Popup-Blocker deaktivieren')}
 });
 
 // INIT
 sAC('f-from','ac-from','from');sAC('f-to','ac-to','to');sAC('f-purpose','ac-purpose','purpose');
-async function initData(){ldL();rE();initForm();sL(true);const ok=await syncDown();sL(false);if(ok){rE();initForm()}}
+async function initData(){ldL();rE();initForm();sL(true,'Laden...');const ok=await syncDown();sL(false);if(ok){rE();initForm()}}
 checkLogin();
 </script>
 </body>
